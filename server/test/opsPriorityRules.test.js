@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {getOperationsPriorities,prioritySummary} from '../../src/opsPriorityRules.mjs';
+const base={date:'2026-11-04',slot:'08:30',status:'Đã xác nhận',paymentStatus:'Chưa thanh toán'};
+const list=[{...base,code:'A',date:'2026-11-03'},{...base,code:'B',status:'Đang chờ xác nhận'},{...base,code:'C'},{...base,code:'D',status:'Hoàn tất'},{...base,code:'E',status:'Đã hủy'},{...base,code:'F',status:'Không đến'}];
+test('sort urgent overdue before pending, staffing and finance',()=>assert.deepEqual(getOperationsPriorities(list,'2026-11-04').map(x=>x.code),['A','B','C','D']));
+test('exclude cancelled and no-show entirely',()=>assert.equal(getOperationsPriorities(list,'2026-11-04').length,4));
+test('never infer payment from completed care',()=>assert.equal(getOperationsPriorities([{...base,code:'X',status:'Hoàn tất'}],'2026-11-04')[0].kind,'finance'));
+test('do not mark already paid completed booking as priority',()=>assert.deepEqual(getOperationsPriorities([{...base,code:'X',status:'Hoàn tất',paymentStatus:'Đã thanh toán'}],'2026-11-04'),[]));
+test('assigned staff clears staffing alert',()=>assert.deepEqual(getOperationsPriorities([{...base,code:'X',assignedStaffId:3}],'2026-11-04'),[]));
+test('one card per booking, overdue wins over staffing',()=>assert.equal(getOperationsPriorities([{...base,code:'X',date:'2026-11-01'}],'2026-11-04').length,1));
+test('invalid today rejected',()=>assert.deepEqual(getOperationsPriorities(list,'bad'),[]));
+test('summary counts groups accurately',()=>assert.deepEqual(prioritySummary(getOperationsPriorities(list,'2026-11-04')),{overdue:1,pending:1,staff:1,finance:1}));

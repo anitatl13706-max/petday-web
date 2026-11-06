@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {noShowIssue} from '../src/staffRules.js';
+const good={status:'Đã xác nhận',paymentStatus:'Chưa thanh toán',hasServiceEvent:false};
+test('valid unpaid confirmed absence after grace',()=>assert.equal(noShowIssue(good),null));
+test('admin may close confirmed booking even before scheduled start',()=>assert.equal(noShowIssue(good),null));
+test('prepaid appointment can still be recorded as absent',()=>assert.equal(noShowIssue({...good,paymentStatus:'Đã thanh toán'}),null));
+test('not after service started',()=>assert.match(noShowIssue({...good,hasServiceEvent:true}),/tiếp nhận/));
+test('not pending',()=>assert.match(noShowIssue({...good,status:'Đang chờ xác nhận'}),/đã xác nhận/));
+test('not completed',()=>assert.match(noShowIssue({...good,status:'Hoàn tất'}),/đã xác nhận/));

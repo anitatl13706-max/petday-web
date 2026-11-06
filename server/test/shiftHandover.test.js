@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {handoverItems,handoverCounts} from '../../src/shiftHandoverRules.mjs';
+const base={code:'PD1',date:'2026-11-04',slot:'08:30',status:'Đã xác nhận',paymentStatus:'Chưa thanh toán',assignedStaffId:1};
+const items=(b)=>handoverItems(b,'2026-11-04');
+test('invalid reporting date yields empty result',()=>assert.deepEqual(handoverItems([base],'invalid'),[]));
+test('overdue active booking must be investigated',()=>assert.equal(items([{...base,date:'2026-11-03'}])[0].kind,'overdue'));
+test('pending today requests approval',()=>assert.equal(items([{...base,status:'Đang chờ xác nhận'}])[0].kind,'approval'));
+test('unassigned confirmed booking shows staffing issue',()=>assert.equal(items([{...base,assignedStaffId:null}])[0].kind,'staff'));
+test('completed unpaid booking goes to manual reconciliation',()=>assert.equal(items([{...base,status:'Hoàn tất'}])[0].kind,'payment'));
+test('completed paid booking has no handover item',()=>assert.deepEqual(items([{...base,status:'Hoàn tất',paymentStatus:'Đã thanh toán'}]),[]));
+test('cancelled unpaid booking has no receivable',()=>assert.deepEqual(items([{...base,status:'Đã hủy'}]),[]));
+test('paid cancelled booking flags refund review, never an automatic refund',()=>assert.equal(items([{...base,status:'Đã hủy',paymentStatus:'Đã thanh toán'}])[0].kind,'finance-review'));
+test('no-show paid requires finance review',()=>assert.equal(items([{...base,status:'Không đến',paymentStatus:'Đã thanh toán'}])[0].kind,'finance-review'));
+test('does not duplicate same issue; stable order',()=>{let x=items([{...base,code:'B',status:'Hoàn tất'}, {...base,code:'A',status:'Hoàn tất'}]);assert.deepEqual(x.map(i=>i.code),['A','B']);});
+test('counts reflect finance and urgent',()=>{let r=items([{...base,code:'A',date:'2026-11-02'},{...base,code:'B',status:'Hoàn tất'},{...base,code:'C',status:'Đã hủy',paymentStatus:'Đã thanh toán'}]);assert.deepEqual(handoverCounts(r),{total:3,urgent:2,approval:0,finance:2});});

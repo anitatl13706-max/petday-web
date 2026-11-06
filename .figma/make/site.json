@@ -1,0 +1,10 @@
+{
+  "description": "Khám phá và đặt dịch vụ grooming, spa và daycare cho thú cưng, với thông tin chăm sóc đáng tin cậy, đánh giá khách hàng và bài viết hữu ích.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

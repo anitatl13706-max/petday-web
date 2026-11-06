@@ -1,0 +1,15 @@
+﻿node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.backup
+*.dump
+*.log
+.DS_Store
+
+# Files excluded pending security review
+docs/V6_13_RECOVERY_AND_PAYMENT.md
+docs/V6_36_REAL_FIXES_AND_MIGRATION.md
+server/.env.example
+server/test/petdayAi.test.js

@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import {strict as assert} from 'node:assert';
+import {staffAssignmentIssue,careStepIssue} from '../src/staffRules.js';
+const good={bookingStatus:'Đã xác nhận',staffActive:true,bookingBranch:'PetDay Thảo Điền',staffBranch:'PetDay Thảo Điền',hasShift:true,isBusy:false};
+test('assignment permitted with matching branch and valid shift',()=>assert.equal(staffAssignmentIssue(good),null));
+test('assignment rejects wrong branch',()=>assert.match(staffAssignmentIssue({...good,staffBranch:'PetDay Phú Mỹ Hưng'}),/chi nhánh/));
+test('assignment rejects unavailable shift',()=>assert.match(staffAssignmentIssue({...good,hasShift:false}),/ca trực/));
+test('assignment rejects double booking',()=>assert.match(staffAssignmentIssue({...good,isBusy:true}),/cùng khung giờ/));
+test('assignment rejects not yet confirmed',()=>assert.match(staffAssignmentIssue({...good,bookingStatus:'Đang chờ xác nhận'}),/xác nhận/));
+const progress={status:'Đang thực hiện',hasCheckIn:true,hasCareUpdate:false,hasReady:false,hasCheckOut:false};
+test('must log a care update before ready',()=>assert.match(careStepIssue('ready',progress),/chăm sóc/));
+test('ready allowed after care update',()=>assert.equal(careStepIssue('ready',{...progress,hasCareUpdate:true}),null));
+test('check-out allowed after check-in, no required photo or intermediate step',()=>assert.equal(careStepIssue('check_out',progress),null));
+test('check-out cannot occur twice',()=>assert.match(careStepIssue('check_out',{...progress,hasCheckOut:true}),/hoàn tất/));
+test('check-out forbidden before check-in',()=>assert.match(careStepIssue('check_out',{...progress,hasCheckIn:false}),/bắt đầu/));

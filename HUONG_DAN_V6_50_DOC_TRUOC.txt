@@ -1,0 +1,17 @@
+PETDAY V6_50 — DOC TRUOC KHI CHAY
+
+SQL CẦN TÌM:
+PETDAY_OFFICIAL/database/030_v649_retail_delivery_and_full_catalog.sql
+PETDAY_OFFICIAL/database/031_v650_bank_transfer_workflow_safety.sql
+
+1) Sao lưu PostgreSQL TEST, kiểm tra tên database và các bảng users/bookings/retail_products/retail_orders.
+2) Chỉ chạy SQL 030 khi đã có retail_products và retail_orders (SQL 024/025).
+3) Chạy SQL 031 để bổ sung các bảng bank transfer còn thiếu (không cập nhật trạng thái đã thanh toán).
+4) Chạy Backend/Frontend bằng npm run dev trong từng thư mục tương ứng.
+5) Admin > Tài chính > Thiết lập ngân hàng; Customer > Đặt lịch > Chuyển khoản.
+6) Customer > Lịch hẹn > Thanh toán > Tôi đã chuyển khoản.
+7) Admin > Tài chính > Khách báo đã chuyển khoản > Sổ thu tiền > đối chiếu sao kê THẬT > Ghi nhận.
+
+CHI TIẾT: docs/V6_50_BANK_TRANSFER_AND_SQL_SETUP.md
+
+Không chạy trên database chính trước khi backup và test. Không gửi .env hay mật khẩu ngân hàng.

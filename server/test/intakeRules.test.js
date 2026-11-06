@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {intakeEditIssue,validEmergencyPhone} from '../src/intakeRules.js';
+test('allow intake on pending booking before check-in',()=>assert.equal(intakeEditIssue('Đang chờ xác nhận',false),null));
+test('allow intake on confirmed booking before check-in',()=>assert.equal(intakeEditIssue('Đã xác nhận',false),null));
+test('forbid intake after check-in even if booking status stale',()=>assert.match(intakeEditIssue('Đã xác nhận',true),/check-in/));
+test('forbid intake on in-progress booking',()=>assert.ok(intakeEditIssue('Đang thực hiện',false)));
+test('forbid intake on cancelled booking',()=>assert.ok(intakeEditIssue('Đã hủy',false)));
+test('forbid intake on completed booking',()=>assert.ok(intakeEditIssue('Hoàn tất',false)));
+test('accept ordinary local mobile contact',()=>assert.ok(validEmergencyPhone('0912345678')));
+test('reject short invalid contact',()=>assert.equal(validEmergencyPhone('1234'),false));
+test('reject phone with injected text',()=>assert.equal(validEmergencyPhone('0912345678<script>'),false));

@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {refundEligibility,refundDecisionIssue} from '../src/refundRules.js';
+const base={paymentStatus:'Đã thanh toán',status:'Hoàn tất',total:300000};
+test('eligible completed paid booking',()=>assert.equal(refundEligibility(base),null));
+test('reject unpaid booking',()=>assert.match(refundEligibility({...base,paymentStatus:'Chưa thanh toán'}),/Chưa/));
+test('reject in-progress service',()=>assert.match(refundEligibility({...base,status:'Đang thực hiện'}),/kết thúc/));
+test('reject zero-amount refund',()=>assert.match(refundEligibility({...base,total:0}),/Không có/));
+test('reject duplicate request',()=>assert.match(refundEligibility({...base,existing:true}),/đã có/));
+test('approve only pending request',()=>assert.equal(refundDecisionIssue('pending','approve',true),null));
+test('cannot complete before approval',()=>assert.match(refundDecisionIssue('pending','complete',true),/duyệt/));
+test('cannot approve after rejection',()=>assert.match(refundDecisionIssue('rejected','approve',true),/chờ/));
+test('cannot complete twice',()=>assert.match(refundDecisionIssue('completed','complete',true),/duyệt/));
+test('cannot refund without confirmed payment',()=>assert.match(refundDecisionIssue('approved','complete',false),/thanh toán/));

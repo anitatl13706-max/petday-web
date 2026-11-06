@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {calculate,transitions,validSlot,validFutureDate} from '../src/rules.js';
+test('pricing pet 6.5 kg',()=>assert.equal(calculate('Grooming toàn diện',{species:'Chó',weight:6.5,age:2}).total,230000));
+test('daycare rejects cats',()=>assert.throws(()=>calculate('Daycare cả ngày',{species:'Mèo',weight:4,age:2})));
+test('daycare only morning',()=>assert.equal(validSlot('Daycare cả ngày','15:00'),false));
+test('completed cannot transition',()=>assert.deepEqual(transitions['Hoàn tất'],[]));
+test('past date forbidden',()=>assert.equal(validFutureDate('2020-01-01'),false));
+import {calculateExtras} from '../src/rules.js';
+test('add-ons priced server-side for spa',()=>assert.equal(calculateExtras('Spa dưỡng lông',['nail_trim','coat_mask']).total,110000));
+test('reject duplicate add-on IDs',()=>assert.throws(()=>calculateExtras('Spa dưỡng lông',['nail_trim','nail_trim'])));
+test('reject ineligible add-on for main service',()=>assert.throws(()=>calculateExtras('Grooming toàn diện',['daycare_meal'])));
+test('reject more than three add-ons',()=>assert.throws(()=>calculateExtras('Daycare cả ngày',['nail_trim','ear_care','daycare_meal','coat_mask'])));

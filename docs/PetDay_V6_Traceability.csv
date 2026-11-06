@@ -1,0 +1,36 @@
+﻿ID,Nhóm,Chức năng,Ưu tiên,Tình trạng tại baseline,Bằng chứng nghiệm thu
+ACC-01,Tài khoản,Đăng ký,P0,Đã có một phần,Chưa kiểm thử E2E V6
+ACC-02,Tài khoản,Đăng nhập,P0,Đã có một phần,Chưa kiểm thử E2E V6
+ACC-03,Tài khoản,Quên mật khẩu,P0,Đã có một phần,Chưa kiểm thử E2E V6
+ACC-04,Tài khoản,Chỉnh sửa hồ sơ,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+PET-01,Hồ sơ thú cưng,Thêm Pet Profile,P0,Đã có một phần,Chưa kiểm thử E2E V6
+PET-02,Hồ sơ thú cưng,"Xem, sửa, xóa Pet Profile",P0,Đã có một phần,Chưa kiểm thử E2E V6
+PET-03,Hồ sơ thú cưng,Lịch sử chăm sóc,P0,Đã có một phần,Chưa kiểm thử E2E V6
+SRV-01,Tra cứu dịch vụ,Danh sách dịch vụ,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+SRV-02,Tra cứu dịch vụ,"Tìm kiếm, lọc dịch vụ",P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+SRV-03,Tra cứu dịch vụ,Chi tiết dịch vụ,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+BKG-01,Đặt lịch,Chọn thú cưng,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-02,Đặt lịch,Chọn dịch vụ,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-03,Đặt lịch,Dynamic Pricing,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-04,Đặt lịch,Chọn khung giờ trống,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-05,Đặt lịch,Xác nhận đặt lịch,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-06,Đặt lịch,Xem lịch hẹn,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-07,Đặt lịch,Hủy lịch,P0,Đã có một phần,Chưa kiểm thử E2E V6
+BKG-08,Đặt lịch,Đổi lịch,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+PAY-01,Thanh toán,Chọn cách thanh toán,P0,Đã có một phần,Chưa kiểm thử E2E V6
+PAY-02,Thanh toán,Trạng thái thanh toán,P0,Đã có một phần,Chưa kiểm thử E2E V6
+REV-01,Đánh giá,Gửi đánh giá,P1,Đã có một phần,Chưa kiểm thử E2E V6
+REV-02,Đánh giá,Xem đánh giá,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADM-01,Quản trị,Đăng nhập Admin,P0,Đã có một phần,Chưa kiểm thử E2E V6
+ADM-02,Quản trị,Quản lý dịch vụ,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADM-03,Quản trị,Quản lý lịch hẹn,P0,Đã có một phần,Chưa kiểm thử E2E V6
+ADM-04,Quản trị,Quản lý khung giờ,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADM-05,Quản trị,Quản lý khách hàng,P0,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADM-06,Quản trị,Kiểm duyệt đánh giá,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADM-07,Quản trị,Dashboard KPI,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADV-01,Nâng cao,Gợi ý dịch vụ theo luật,P1,Đã có một phần,Chưa kiểm thử E2E V6
+ADV-02,Nâng cao,Pet Care Timeline,P1,Đã có một phần,Chưa kiểm thử E2E V6
+ADV-03,Nâng cao,Dịch vụ add-on,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADV-04,Nâng cao,Pet Taxi,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADV-05,Nâng cao,Sản phẩm mua kèm,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6
+ADV-06,Nâng cao,Nhắc lịch,P1,Chưa có API hoàn chỉnh,Chưa kiểm thử E2E V6

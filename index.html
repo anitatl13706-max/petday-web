@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#142B55" />
+  <title>PetDay – Đặt lịch chăm sóc thú cưng</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+  (function () {
+    var failure = '';
+    function show(message) {
+      failure = String(message || 'Ứng dụng chưa thể khởi động');
+      var node = document.getElementById('root');
+      if (!node || node.childElementCount > 0) return;
+      node.innerHTML = '<main style="min-height:100vh;background:#F5F8FD;padding:7vh 20px;font-family:Arial,sans-serif;color:#142B55"><div style="max-width:650px;margin:auto;background:white;padding:30px;border-radius:22px"><h1>PetDay chưa tải được giao diện</h1><p>Kiểm tra Terminal chạy Vite, cài đặt npm và lỗi trong Console. Không cần xóa PostgreSQL.</p><pre id="petday-startup-error" style="white-space:pre-wrap;overflow-wrap:anywhere;color:#9f1239"></pre><p><a href="/">Tải lại trang</a> · <a href="/#kiem-tra-he-thong">Kiểm tra hệ thống</a></p></div></main>';
+      var pre = document.getElementById('petday-startup-error');
+      if (pre) pre.textContent = failure;
+    }
+    window.addEventListener('error',function (event) { failure = event.message || String(event.error || 'JavaScript error'); });
+    window.addEventListener('unhandledrejection',function (event) { failure = String(event.reason || 'Promise rejected'); });
+    window.setTimeout(function () { var node = document.getElementById('root'); if (node && node.childElementCount === 0) show(failure || 'Không thể tải mô-đun React. Kiểm tra npm install và Terminal Vite.'); }, 5500);
+  })();
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

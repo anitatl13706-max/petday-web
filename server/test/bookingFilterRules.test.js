@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {matchesBookingFilters} from '../../src/bookingFilterRules.mjs';
+const booking={branch:'PetDay Thảo Điền',date:'2026-11-12'};
+test('accept all',()=>assert.equal(matchesBookingFilters(booking),true));
+test('filter by selected branch',()=>assert.equal(matchesBookingFilters(booking,{branch:'PetDay Phú Mỹ Hưng'}),false));
+test('start date inclusive',()=>assert.equal(matchesBookingFilters(booking,{start:'2026-11-12'}),true));
+test('end date inclusive',()=>assert.equal(matchesBookingFilters(booking,{end:'2026-11-12'}),true));
+test('outside start excluded',()=>assert.equal(matchesBookingFilters(booking,{start:'2026-11-13'}),false));
+test('outside end excluded',()=>assert.equal(matchesBookingFilters(booking,{end:'2026-11-11'}),false));

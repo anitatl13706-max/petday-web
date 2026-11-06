@@ -1,0 +1,1390 @@
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Be Vietnam Pro', sans-serif;
+  --color-navy: #142b55;
+  --color-sky-soft: #dceeff;
+  --color-coral: #ff765e;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+    color: #142b55;
+    background: white;
+    font-family: 'Be Vietnam Pro', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  a,
+  select {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: #ff765e;
+    color: white;
+  }
+}
+
+@layer components {
+  .container-pd {
+    width: min(100% - 32px, 1180px);
+    margin-inline: auto;
+  }
+
+  .section-space {
+    padding-block: 96px;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #ff765e;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+
+  .eyebrow::before {
+    content: '';
+    width: 22px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .nav-link {
+    position: relative;
+    padding-block: 27px;
+    color: #526078;
+    font-size: 14px;
+    font-weight: 600;
+    transition: color .2s;
+  }
+
+  .nav-link:hover,
+  .nav-link.active {
+    color: #142b55;
+  }
+
+  .nav-link.active::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 17px;
+    left: 0;
+    height: 2px;
+    border-radius: 99px;
+    background: #ff765e;
+  }
+
+  .mobile-link {
+    border-bottom: 1px solid rgba(20, 43, 85, .08);
+    padding: 14px 2px;
+    text-align: left;
+    font-weight: 600;
+    color: #142b55;
+  }
+
+  .btn-coral,
+  .btn-navy,
+  .btn-white,
+  .btn-outline {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border-radius: 999px;
+    padding: 0 22px;
+    font-size: 14px;
+    font-weight: 700;
+    transition: transform .2s, box-shadow .2s, background .2s;
+  }
+
+  .btn-coral {
+    color: white;
+    background: #ff765e;
+    box-shadow: 0 8px 20px rgba(255, 118, 94, .22);
+  }
+
+  .btn-coral:hover,
+  .btn-navy:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(20, 43, 85, .2);
+  }
+
+  .btn-navy {
+    color: white;
+    background: #142b55;
+    box-shadow: 0 8px 20px rgba(20, 43, 85, .16);
+  }
+
+  .btn-white {
+    color: #142b55;
+    background: white;
+    box-shadow: 0 5px 18px rgba(20, 43, 85, .08);
+  }
+
+  .btn-outline {
+    border: 1px solid rgba(20, 43, 85, .17);
+    color: #142b55;
+    background: white;
+  }
+
+  .btn-outline:hover {
+    background: #dceeff;
+    border-color: transparent;
+  }
+
+  .check-dot {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border-radius: 50%;
+    color: white;
+    background: #ff765e;
+  }
+
+  .field {
+    min-width: 0;
+    border-radius: 16px;
+    background: #f5f8fb;
+    padding: 11px 15px;
+  }
+
+  .field span {
+    display: block;
+    margin-bottom: 5px;
+    color: #8792a4;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .field select,
+  .field input {
+    width: 100%;
+    color: #142b55;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 700;
+    outline: none;
+  }
+
+  .service-card {
+    overflow: hidden;
+    border: 1px solid rgba(20, 43, 85, .08);
+    border-radius: 26px;
+    background: white;
+    box-shadow: 0 10px 38px rgba(20, 43, 85, .06);
+    transition: transform .3s, box-shadow .3s;
+  }
+
+  .service-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 18px 50px rgba(20, 43, 85, .12);
+  }
+
+  .slider-btn {
+    display: grid;
+    width: 46px;
+    height: 46px;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 50%;
+    color: white;
+    transition: background .2s;
+  }
+
+  .slider-btn:hover {
+    background: #ff765e;
+    border-color: #ff765e;
+  }
+
+  .article-card h3,
+  .article-card button {
+    transition: color .2s;
+  }
+
+  .article-card:hover h3,
+  .article-card:hover button {
+    color: #ff765e;
+  }
+
+  .social-btn {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 50%;
+    color: white;
+    transition: background .2s;
+  }
+
+  .social-btn:hover {
+    background: #ff765e;
+    border-color: #ff765e;
+  }
+
+  .footer-title {
+    margin-bottom: 18px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .footer-links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    color: rgba(255,255,255,.6);
+    font-size: 14px;
+  }
+
+  .footer-links a,
+  .footer-links button {
+    transition: color .2s;
+  }
+
+  .footer-links a:hover,
+  .footer-links button:hover {
+    color: #ff765e;
+  }
+
+  .booking-stepper {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .booking-step {
+    min-width: 0;
+    color: #8a95a6;
+    font-size: 12px;
+  }
+
+  .booking-step-track {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .booking-step-track span {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    background: #edf1f5;
+    font-weight: 800;
+  }
+
+  .booking-step-track i {
+    position: absolute;
+    z-index: 0;
+    top: 50%;
+    right: 0;
+    left: 36px;
+    height: 2px;
+    transform: translateY(-50%);
+    background: #e9eef3;
+  }
+
+  .booking-step > strong {
+    display: block;
+    margin-top: 9px;
+    padding-right: 16px;
+    line-height: 1.45;
+  }
+
+  .booking-step.active,
+  .booking-step.completed {
+    color: #142b55;
+  }
+
+  .booking-step.active .booking-step-track span {
+    color: white;
+    background: #ff765e;
+    box-shadow: 0 0 0 5px rgba(255,118,94,.12);
+  }
+
+  .booking-step.completed .booking-step-track span {
+    color: white;
+    background: #142b55;
+  }
+
+  .booking-step.completed .booking-step-track i {
+    background: #142b55;
+  }
+
+  .step-kicker {
+    color: #ff765e;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .booking-title {
+    margin-top: 7px;
+    color: #142b55;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -.035em;
+  }
+
+  .booking-copy {
+    margin-top: 8px;
+    margin-bottom: 22px;
+    color: #718095;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .booking-field {
+    display: block;
+  }
+
+  .booking-field > span {
+    display: block;
+    margin-bottom: 7px;
+    color: #526078;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .booking-field input,
+  .booking-field select,
+  .booking-field textarea,
+  .form-control {
+    width: 100%;
+    min-height: 47px;
+    border: 1px solid rgba(20,43,85,.14);
+    border-radius: 12px;
+    padding: 11px 13px;
+    color: #142b55;
+    background: white;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+
+  .booking-field textarea {
+    resize: vertical;
+  }
+
+  .booking-field input:focus,
+  .booking-field select:focus,
+  .booking-field textarea:focus,
+  .form-control:focus {
+    border-color: #6da9dd;
+    box-shadow: 0 0 0 3px rgba(109,169,221,.14);
+  }
+
+  .booking-field > small {
+    display: block;
+    margin-top: 6px;
+    color: #8994a5;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .select-card {
+    cursor: pointer;
+    border: 1px solid rgba(20,43,85,.1);
+    border-radius: 18px;
+    padding: 17px;
+    background: white;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+  }
+
+  .select-card:hover,
+  .select-card.selected {
+    border-color: #77addb;
+    background: #f7fbff;
+    box-shadow: 0 0 0 3px rgba(119,173,219,.1);
+  }
+
+  .demo-tag {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 5px 8px;
+    color: #486480;
+    background: #dceeff;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .option-row {
+    display: flex;
+    min-height: 70px;
+    cursor: pointer;
+    align-items: flex-start;
+    gap: 11px;
+    border: 1px solid rgba(20,43,85,.1);
+    border-radius: 15px;
+    padding: 14px;
+    transition: border-color .2s, background .2s;
+  }
+
+  .option-row.selected {
+    border-color: #77addb;
+    background: #f3f9ff;
+  }
+
+  .option-row input {
+    margin-top: 3px;
+    accent-color: #ff765e;
+  }
+
+  .option-row strong,
+  .option-row small {
+    display: block;
+  }
+
+  .option-row strong {
+    color: #142b55;
+    font-size: 13px;
+  }
+
+  .option-row small {
+    margin-top: 4px;
+    color: #7d899a;
+    font-size: 10px;
+  }
+
+  .quantity-btn {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border-radius: 8px;
+    color: #142b55;
+    background: #dceeff;
+    font-weight: 800;
+  }
+
+  .quantity-btn:disabled {
+    cursor: not-allowed;
+    opacity: .35;
+  }
+
+  .slot-btn {
+    display: flex;
+    min-height: 72px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    border: 1px solid rgba(20,43,85,.1);
+    border-radius: 15px;
+    padding: 12px 14px;
+    color: #142b55;
+    background: white;
+  }
+
+  .slot-btn small {
+    margin-top: 4px;
+    color: #7c899a;
+    font-size: 9px;
+  }
+
+  .slot-btn.selected {
+    border-color: #142b55;
+    color: white;
+    background: #142b55;
+  }
+
+  .slot-btn.selected small {
+    color: rgba(255,255,255,.65);
+  }
+
+  .slot-btn.unavailable {
+    cursor: not-allowed;
+    color: #9da6b3;
+    background: #f2f4f6;
+    text-decoration: line-through;
+  }
+
+  .review-card {
+    border: 1px solid rgba(20,43,85,.09);
+    border-radius: 16px;
+    padding: 16px;
+    background: #fafcfe;
+  }
+
+  .review-card span,
+  .review-card strong,
+  .review-card p {
+    display: block;
+  }
+
+  .review-card span {
+    color: #8b95a5;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .review-card strong {
+    margin-top: 7px;
+    color: #142b55;
+    font-size: 14px;
+  }
+
+  .review-card p {
+    margin-top: 4px;
+    color: #718095;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+}
+
+.hero-dot {
+  background-image: radial-gradient(#142b55 1.5px, transparent 1.5px);
+  background-size: 13px 13px;
+}
+
+@media (max-width: 767px) {
+  .section-space {
+    padding-block: 68px;
+  }
+
+  .container-pd {
+    width: min(100% - 24px, 1180px);
+  }
+
+  .booking-step {
+    font-size: 9px;
+  }
+
+  .booking-step-track span {
+    width: 32px;
+    height: 32px;
+  }
+
+  .booking-step-track i {
+    left: 32px;
+  }
+
+  .booking-step > strong {
+    margin-top: 8px;
+    padding-right: 7px;
+    line-height: 1.4;
+  }
+
+  .booking-title {
+    font-size: 24px;
+  }
+}
+
+@layer components {
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: none;
+    height: 100vh;
+    flex-direction: column;
+    overflow-y: auto;
+    color: white;
+    background: #142b55;
+  }
+
+  .admin-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 20px 14px;
+  }
+
+  .admin-nav button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-radius: 11px;
+    padding: 11px 13px;
+    color: rgba(255,255,255,.62);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .admin-nav button span {
+    width: 22px;
+    text-align: center;
+  }
+
+  .admin-nav button:hover,
+  .admin-nav button.active {
+    color: white;
+    background: rgba(255,255,255,.1);
+  }
+
+  .admin-nav button.active {
+    box-shadow: inset 3px 0 #ff765e;
+  }
+
+  .admin-topbar {
+    display: flex;
+    min-height: 78px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(20,43,85,.08);
+    padding: 14px 20px;
+    background: white;
+  }
+
+  .admin-topbar h1 {
+    margin-top: 3px;
+    color: #142b55;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.025em;
+  }
+
+  .admin-mobile-nav {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    border-bottom: 1px solid rgba(20,43,85,.08);
+    padding: 10px 12px;
+    background: white;
+  }
+
+  .admin-mobile-nav button {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 9px 13px;
+    color: #657287;
+    background: #f1f5f8;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .admin-mobile-nav button.active {
+    color: white;
+    background: #142b55;
+  }
+
+  .admin-workspace {
+    width: min(100% - 24px, 1400px);
+    margin-inline: auto;
+    padding-block: 24px 60px;
+  }
+
+  .admin-page-head {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .admin-page-head h2 {
+    color: #142b55;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.03em;
+  }
+
+  .admin-page-head p {
+    margin-top: 5px;
+    color: #748095;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .admin-btn {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    padding: 0 15px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .admin-btn.primary {
+    color: white;
+    background: #ff765e;
+  }
+
+  .admin-btn.secondary {
+    border: 1px solid rgba(20,43,85,.13);
+    color: #142b55;
+    background: white;
+  }
+
+  .admin-btn.danger {
+    color: #c64040;
+    background: #fff1f1;
+  }
+
+  .admin-btn.small {
+    min-height: 34px;
+    padding-inline: 11px;
+    font-size: 10px;
+  }
+
+  .admin-btn:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+  }
+
+  .admin-stat {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid rgba(20,43,85,.07);
+    border-radius: 18px;
+    padding: 18px;
+    background: white;
+    box-shadow: 0 6px 24px rgba(20,43,85,.04);
+  }
+
+  .admin-stat > span {
+    display: grid;
+    width: 54px;
+    height: 54px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 15px;
+    font-size: 21px;
+    font-weight: 800;
+  }
+
+  .admin-stat strong,
+  .admin-stat small {
+    display: block;
+  }
+
+  .admin-stat strong {
+    color: #142b55;
+    font-size: 13px;
+  }
+
+  .admin-stat small {
+    margin-top: 4px;
+    color: #8994a5;
+    font-size: 9px;
+  }
+
+  .admin-card,
+  .admin-detail {
+    border: 1px solid rgba(20,43,85,.07);
+    border-radius: 19px;
+    padding: 20px;
+    background: white;
+    box-shadow: 0 7px 25px rgba(20,43,85,.04);
+  }
+
+  .admin-card h3,
+  .admin-detail h3 {
+    color: #142b55;
+    font-size: 16px;
+    font-weight: 750;
+  }
+
+  .admin-card-head {
+    margin-bottom: 17px;
+  }
+
+  .admin-card-head h3 {
+    font-size: 15px;
+  }
+
+  .admin-card-head p {
+    margin-top: 3px;
+    color: #8994a5;
+    font-size: 10px;
+  }
+
+  .admin-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-list button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    border-top: 1px solid rgba(20,43,85,.07);
+    padding: 13px 0;
+    text-align: left;
+  }
+
+  .admin-list strong,
+  .admin-list span {
+    display: block;
+  }
+
+  .admin-list strong {
+    color: #142b55;
+    font-size: 12px;
+  }
+
+  .admin-list div > span {
+    margin-top: 4px;
+    color: #8490a1;
+    font-size: 9px;
+  }
+
+  .status-pill,
+  .demo-badge {
+    display: inline-flex;
+    width: fit-content;
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .demo-badge {
+    color: #3a6285;
+    background: #dceeff;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+
+  .admin-empty {
+    border: 1px dashed rgba(20,43,85,.16);
+    border-radius: 20px;
+    padding: 64px 20px;
+    text-align: center;
+    background: white;
+  }
+
+  .admin-empty > span {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    margin: 0 auto;
+    place-items: center;
+    border-radius: 50%;
+    color: #56718d;
+    background: #dceeff;
+    font-size: 22px;
+  }
+
+  .admin-empty h3 {
+    margin-top: 15px;
+    color: #142b55;
+    font-weight: 750;
+  }
+
+  .admin-empty p {
+    margin-top: 6px;
+    color: #7b8799;
+    font-size: 12px;
+  }
+
+  .admin-search {
+    display: flex;
+    min-width: min(100%, 330px);
+    align-items: center;
+    gap: 9px;
+    border: 1px solid rgba(20,43,85,.12);
+    border-radius: 11px;
+    padding: 0 12px;
+    background: white;
+  }
+
+  .admin-search input {
+    width: 100%;
+    min-height: 43px;
+    outline: none;
+    font-size: 12px;
+  }
+
+  .admin-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .admin-table th {
+    padding: 12px 15px;
+    color: #8490a1;
+    background: #f8fafc;
+    font-size: 9px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+
+  .admin-table td {
+    border-top: 1px solid rgba(20,43,85,.07);
+    padding: 14px 15px;
+    color: #526078;
+    font-size: 11px;
+    vertical-align: top;
+  }
+
+  .admin-table tbody tr {
+    cursor: pointer;
+  }
+
+  .admin-table tbody tr:hover,
+  .admin-table tbody tr.selected {
+    background: #f3f8fc;
+  }
+
+  .admin-table td strong,
+  .admin-table td small {
+    display: block;
+  }
+
+  .admin-table td strong {
+    color: #142b55;
+  }
+
+  .admin-table td small {
+    margin-top: 4px;
+    color: #8b95a5;
+    font-size: 9px;
+  }
+
+  .admin-detail {
+    position: sticky;
+    top: 20px;
+  }
+
+  .detail-section {
+    margin-top: 17px;
+    border-top: 1px solid rgba(20,43,85,.08);
+    padding-top: 14px;
+  }
+
+  .detail-section > span {
+    display: block;
+    margin-bottom: 6px;
+    color: #8994a5;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+
+  .detail-section strong {
+    color: #142b55;
+    font-size: 12px;
+  }
+
+  .detail-section p {
+    margin-top: 4px;
+    color: #6e7b8f;
+    font-size: 10px;
+    line-height: 1.6;
+  }
+
+  .admin-form-panel {
+    border: 1px solid #b9d8f4;
+    border-radius: 20px;
+    padding: 20px;
+    background: #f6fbff;
+  }
+
+  .admin-form-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .admin-form-head h3 {
+    color: #142b55;
+    font-size: 16px;
+    font-weight: 750;
+  }
+
+  .admin-form-head p {
+    margin-top: 4px;
+    color: #748095;
+    font-size: 10px;
+  }
+
+  .admin-form-head button {
+    color: #647287;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .admin-field > span {
+    display: block;
+    margin-bottom: 6px;
+    color: #526078;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .admin-field input,
+  .admin-field select,
+  .admin-field textarea {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid rgba(20,43,85,.13);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: #142b55;
+    background: white;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .admin-field textarea {
+    resize: vertical;
+  }
+
+  .admin-field input:focus,
+  .admin-field select:focus,
+  .admin-field textarea:focus {
+    border-color: #72a8d5;
+    box-shadow: 0 0 0 3px rgba(114,168,213,.12);
+  }
+
+  .admin-error {
+    margin-top: 10px;
+    color: #c64040;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .admin-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+    border: 1px solid #ffc7c7;
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: #a93737;
+    background: #fff3f3;
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .admin-alert button {
+    font-weight: 800;
+  }
+
+  .admin-loader {
+    display: inline-block;
+    width: 36px;
+    height: 36px;
+    border: 3px solid #dceeff;
+    border-top-color: #ff765e;
+    border-radius: 50%;
+    animation: admin-spin .8s linear infinite;
+  }
+}
+
+@keyframes admin-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (min-width: 768px) {
+  .admin-page-head {
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .admin-workspace {
+    width: min(100% - 48px, 1400px);
+    padding-top: 32px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .admin-sidebar {
+    display: flex;
+  }
+
+  .admin-mobile-nav {
+    display: none;
+  }
+
+  .admin-topbar {
+    padding-inline: 28px;
+  }
+}
+
+/* V6.20: focused workspace instead of one endless administration page. */
+.petday-admin-mode > [id^="admin-"],
+.petday-admin-mode > section[id^="admin-"] { animation: petday-panel-in .22s ease-out; }
+.petday-admin-mode[data-admin-tab="today"] > :is(#admin-staff,#admin-capacity,#admin-bank-settings,#admin-bookings,#admin-reschedules,#admin-promotions,#admin-refunds,#admin-payment-audit,#admin-consultations) {display:none !important}
+.petday-admin-mode[data-admin-tab="appointments"] > :is(#admin-staff,#admin-bank-settings,#admin-hub,#admin-reminders,#admin-overview-kpis,#admin-promotions,#admin-refunds,#admin-payment-audit,#admin-consultations) {display:none !important}
+.petday-admin-mode[data-admin-tab="people"] > :is(#admin-capacity,#admin-bank-settings,#admin-hub,#admin-reminders,#admin-overview-kpis,#admin-queue,#admin-bookings,#admin-reschedules,#admin-promotions,#admin-refunds,#admin-payment-audit,#admin-consultations) {display:none !important}
+.petday-admin-mode[data-admin-tab="finance"] > :is(#admin-staff,#admin-capacity,#admin-hub,#admin-reminders,#admin-overview-kpis,#admin-queue,#admin-bookings,#admin-reschedules,#admin-promotions,#admin-consultations) {display:none !important}
+.petday-admin-mode[data-admin-tab="support"] > :is(#admin-staff,#admin-capacity,#admin-bank-settings,#admin-hub,#admin-reminders,#admin-overview-kpis,#admin-queue,#admin-bookings,#admin-reschedules,#admin-refunds,#admin-payment-audit) {display:none !important}
+@keyframes petday-panel-in {from{opacity:.7;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+.petday-admin-mode > section[id^="admin-"],.petday-admin-mode > section {box-shadow:0 8px 35px rgba(20,43,85,.045);border:1px solid #e8eff8}
+.petday-admin-mode .petday-admin-tabs {scrollbar-width:thin}
+@media(max-width:640px){.petday-admin-mode .petday-admin-tabs button{font-size:12px;padding:11px 13px}.petday-admin-mode > section{padding:18px}}
+
+/* V6.20 visual polish: readable spacing, intentional hierarchy and responsive workspace. */
+.petday-admin-mode .petday-admin-tabs {
+  border-radius: 18px;
+  box-shadow: 0 12px 32px rgba(20,43,85,.10);
+}
+.petday-admin-mode > section h2 { letter-spacing: -.025em; line-height: 1.35; }
+.petday-admin-mode > section input:focus-visible,
+.petday-admin-mode > section textarea:focus-visible,
+.petday-admin-mode > section select:focus-visible { outline: 2px solid #ff765e; outline-offset: 2px; }
+.petday-admin-mode > section button,
+.petday-admin-mode .petday-admin-tabs button { transition: background-color .15s, color .15s, box-shadow .15s; }
+@media (prefers-reduced-motion: reduce) {
+ .petday-admin-mode > section { animation:none; }
+ .petday-admin-mode .petday-admin-tabs button { transition:none; }
+}
+
+
+/* V6.21: calm visual system, real booking filters, responsive operations workspace */
+.petday-admin-mode { --petday-navy:#142b55; --petday-coral:#ff765e; }
+.petday-admin-mode > .petday-admin-tabs {position:sticky;top:72px; z-index:35; background:rgba(255,255,255,.97); border:1px solid #e2eaf4; padding:9px;gap:5px;box-shadow:0 12px 30px rgba(20,43,85,.08)}
+.petday-admin-mode > section {border-radius:24px; padding:clamp(18px,2.4vw,30px);box-shadow:0 6px 28px rgba(20,43,85,.045)}
+.petday-admin-mode > section h2 {font-size:clamp(18px,1.55vw,24px)}
+.petday-admin-mode > section button:not(:disabled):active,.petday-booking-card button:not(:disabled):active {transform:translateY(1px)}
+.petday-admin-mode > section :where(input,textarea,select),.petday-booking-card :where(input,textarea,select) {min-height:40px}
+.petday-booking-card {box-shadow:0 5px 18px rgba(20,43,85,.04);transition:box-shadow .2s ease,border-color .2s ease}
+.petday-booking-card:hover {border-color:#b7cbe6;box-shadow:0 12px 30px rgba(20,43,85,.075)}
+.petday-stat-tile {min-height:87px}
+@media (max-width:640px) { .petday-admin-mode > .petday-admin-tabs {top:58px;border-radius:14px;margin-inline:-8px} .petday-admin-mode > .petday-admin-tabs button {min-height:44px} .petday-admin-mode > section {padding:18px;border-radius:20px} .petday-booking-card {padding:16px} }
+@media(prefers-reduced-motion:reduce){.petday-booking-card,.petday-admin-mode > section button {transition:none!important}}
+
+/* Keep the action center only on the overview workspace. */
+.petday-admin-mode[data-admin-tab="appointments"] > #admin-action-center,
+.petday-admin-mode[data-admin-tab="people"] > #admin-action-center,
+.petday-admin-mode[data-admin-tab="finance"] > #admin-action-center,
+.petday-admin-mode[data-admin-tab="support"] > #admin-action-center {display:none!important}
+
+/* V6.22: visual hierarchy & comfort on compact customer and admin screens */
+:root { --pd-navy:#142b55; --pd-coral:#ff765e; --pd-ice:#f5f8fd; }
+.petday-admin-mode > .petday-admin-tabs {border:1px solid #e6edf8; border-radius:20px;box-shadow:0 10px 34px rgba(20,43,85,.09)}
+.petday-admin-mode > section {background:#fff; border:1px solid #e5edf8;box-shadow:0 8px 26px rgba(16,43,80,.035);}
+.petday-admin-mode > section h2 {font-weight:800;letter-spacing:-.02em}
+.petday-admin-mode > section :is(input,select,textarea):focus-visible {box-shadow:0 0 0 3px rgba(255,118,94,.17)}
+.petday-taxi-option {background:linear-gradient(125deg,#f7faff,#eff6ff);border-color:#d6e5f8}
+.petday-taxi-status {border-left:4px solid var(--pd-coral)}
+.petday-booking-card {background:linear-gradient(180deg,#fff,#fcfdff);border:1px solid #e6edf8;border-radius:22px}
+.petday-booking-card:focus-within {border-color:#91b6e6}
+@media(max-width:640px){.petday-admin-mode > section {padding:16px!important}.petday-admin-mode > .petday-admin-tabs {scroll-snap-type:x mandatory}.petday-admin-mode > .petday-admin-tabs button {scroll-snap-align:start}.petday-taxi-option{padding:13px}}
+@media(prefers-reduced-motion:reduce){.petday-admin-mode > section,.petday-booking-card{animation:none!important;transition:none!important}}
+
+/* V6.23 – compact appointment workspace and polished operational surfaces. */
+[data-view="appointments"][data-customer-tab="schedule"] > :is(#customer-payments,#customer-refunds,#customer-reviews),
+[data-view="appointments"][data-customer-tab="payments"] > :is(#appointments-list,#customer-refunds,#customer-reviews),
+[data-view="appointments"][data-customer-tab="refunds"] > :is(#appointments-list,#customer-payments,#customer-reviews),
+[data-view="appointments"][data-customer-tab="reviews"] > :is(#appointments-list,#customer-payments,#customer-refunds){display:none!important}
+.petday-customer-workspace{position:sticky;top:72px;z-index:25;box-shadow:0 12px 30px rgba(20,43,85,.06)}
+.petday-customer-tab{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 15px;min-height:50px;background:#f5f8fd;color:#52617c;border:1px solid transparent;border-radius:14px;font-size:13px;font-weight:800;transition:all .18s}
+.petday-customer-tab:hover{background:#eaf2ff;color:#142b55}
+.petday-customer-tab.is-active{color:#fff;background:#142b55;box-shadow:0 7px 17px rgba(20,43,85,.16)}
+.petday-tab-count{font-size:11px;line-height:23px;min-width:24px;height:23px;text-align:center;border-radius:100px;background:#e4ebf5;color:#142b55;padding:0 5px}
+.petday-customer-tab.is-active .petday-tab-count{background:#ffb4a4;color:#142b55}
+.petday-next-visit{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;background:linear-gradient(117deg,#ffffff 12%,#f2f6fd 65%,#fff0eb 120%);border:1px solid #e3ecf8}
+.petday-next-cta{flex-shrink:0;background:#ff765e;color:white;padding:13px 20px;border-radius:14px;font-size:14px;font-weight:800;box-shadow:0 8px 18px rgba(255,118,94,.22)}
+.petday-next-cta:hover{background:#e85f47}
+.petday-status-badge{border:1px solid transparent;padding:7px 12px;border-radius:100px;font-size:11px;font-weight:800;line-height:1.2}
+.petday-status-badge.is-pending{color:#935a13;background:#fff3d6;border-color:#ffdfa0}
+.petday-status-badge.is-confirmed{color:#1b5896;background:#eaf4ff;border-color:#c5defc}
+.petday-status-badge.is-progress{color:#6846a5;background:#f2ebff;border-color:#dbcafb}
+.petday-status-badge.is-complete{color:#146d55;background:#e2f6ec;border-color:#bce8d2}
+.petday-status-badge.is-cancelled{color:#9b3e44;background:#ffeded;border-color:#ffd1d1}
+.petday-booking-card{box-shadow:0 6px 25px rgba(20,43,85,.04);transition:box-shadow .18s,border-color .18s}
+.petday-booking-card:hover{border-color:#b9cce4;box-shadow:0 12px 32px rgba(20,43,85,.08)}
+.petday-admin-mode > .petday-admin-tabs button[aria-current="page"]{box-shadow:0 4px 14px rgba(20,43,85,.14)}
+.petday-admin-mode .petday-stat-tile:focus-visible,.petday-customer-tab:focus-visible,.petday-next-cta:focus-visible{outline:3px solid #ff765e;outline-offset:3px}
+@media(max-width:639px){.petday-customer-workspace{top:58px;padding:8px!important;border-radius:18px}.petday-customer-tab{padding:10px;min-height:47px;font-size:12px}.petday-next-visit{padding:18px}.petday-next-cta{width:100%}}
+@media(prefers-reduced-motion:reduce){.petday-customer-tab,.petday-booking-card{transition:none!important}}
+
+/* V6.24: daily availability selection, no dead slots. */
+.petday-slot-panel{background:linear-gradient(125deg,#f8faff,#edf4ff)}
+.petday-slot-option:focus-visible{outline:3px solid #ff765e;outline-offset:2px}
+.petday-slot-option:disabled{box-shadow:none}
+@media(max-width:639px){.petday-slot-panel{padding:14px}.petday-slot-option{min-height:67px}}
+
+/* V6.25: clear, compact pre-arrival surfaces and keyboard access. */
+.petday-intake{transition:box-shadow .2s ease,border-color .2s ease}
+.petday-intake[open]{border-color:#b8cde8;box-shadow:0 12px 30px rgba(20,43,85,.07)}
+.petday-intake summary:focus-visible{outline:3px solid #ff765e;outline-offset:5px;border-radius:8px}
+.petday-intake input:focus-visible,.petday-intake textarea:focus-visible{outline:2px solid #ff765e;outline-offset:2px}
+.petday-intake-summary{border-left:3px solid #ff765e}
+@media(max-width:640px){.petday-intake{padding:13px}.petday-intake summary{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.petday-intake{transition:none!important}}
+
+/* V6.26: Accessible receipt preview and clean printable service slip. */
+.petday-receipt-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(16,29,51,.72);overflow-y:auto}
+.petday-receipt-sheet{width:min(100%,570px);max-height:calc(100vh - 44px);overflow-y:auto;border-radius:24px;background:#fff;color:#142B55;padding:30px;box-shadow:0 22px 65px rgba(0,0,0,.26)}
+.petday-receipt-actions{display:flex;justify-content:flex-end;gap:10px;margin-bottom:25px}
+.petday-receipt-actions button{border:1px solid #dbe5f4;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700}
+.petday-receipt-actions button:last-child{background:#142B55;color:#fff}
+.petday-receipt-head{display:flex;gap:14px;align-items:center;border-bottom:2px solid #142B55;padding-bottom:18px}
+.petday-receipt-mark{width:54px;height:54px;display:grid;place-items:center;border-radius:16px;background:#ff765e;color:#fff;font-size:28px}
+.petday-receipt-head p{font-size:10px;font-weight:800;letter-spacing:.18em;color:#7c8da8}
+.petday-receipt-head h2{font-size:28px;letter-spacing:-.03em;font-weight:900}
+.petday-receipt-subtitle{margin-top:24px;color:#6f7c91;font-size:11px;font-weight:900;letter-spacing:.16em}
+.petday-receipt-code{margin:6px 0 22px;font-size:23px;font-weight:900;letter-spacing:.03em}
+.petday-receipt-details{border-top:1px solid #dde7f2}
+.petday-receipt-row{display:flex;justify-content:space-between;gap:25px;border-bottom:1px solid #eaf0f8;padding:13px 0;font-size:13px}
+.petday-receipt-row span{color:#69788f;flex:0 0 112px}
+.petday-receipt-row strong{text-align:right;overflow-wrap:anywhere}
+.petday-receipt-notice{margin-top:24px;padding:14px;background:#f0f5fb;border-radius:12px;font-size:11px;line-height:1.65;color:#54647c}
+.petday-receipt-footer{text-align:center;font-size:12px;font-weight:800;color:#142B55;margin-top:22px}
+@media(max-width:600px){.petday-receipt-overlay{padding:8px}.petday-receipt-sheet{max-height:calc(100vh - 16px);padding:18px}.petday-receipt-row span{flex-basis:88px}}
+@media print{body:has(.petday-receipt-overlay) *{visibility:hidden!important}body:has(.petday-receipt-overlay) .petday-receipt-overlay,body:has(.petday-receipt-overlay) .petday-receipt-overlay *{visibility:visible!important}.petday-receipt-overlay{position:absolute!important;inset:0!important;background:#fff!important;padding:0!important;display:block!important;overflow:visible!important}.petday-receipt-sheet{width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border-radius:0!important;padding:10mm!important}.petday-receipt-actions{display:none!important}.petday-receipt-row,.petday-receipt-head{break-inside:avoid}}
+
+/* V6.27: isolate staff planner to People tab; previously leaked into every admin screen. */
+.petday-admin-mode[data-admin-tab="today"] > #admin-staff-planner,
+.petday-admin-mode[data-admin-tab="appointments"] > #admin-staff-planner,
+.petday-admin-mode[data-admin-tab="finance"] > #admin-staff-planner,
+.petday-admin-mode[data-admin-tab="support"] > #admin-staff-planner {display:none!important}
+/* Change requests belong to the appointment timeline, not finance/refund/review tabs. */
+[data-view="appointments"][data-customer-tab="payments"] > #admin-reschedules,
+[data-view="appointments"][data-customer-tab="refunds"] > #admin-reschedules,
+[data-view="appointments"][data-customer-tab="reviews"] > #admin-reschedules {display:none!important}
+/* Cohesive typography, accessible focus states, responsive dashboard spacing. */
+[data-view="appointments"] > section,[data-view="account"] > section {scroll-margin-top:125px}
+.petday-admin-mode > section, .petday-booking-card {overflow-wrap:anywhere}
+.petday-admin-mode :is(button,a):focus-visible, [data-view="appointments"] :is(button,a):focus-visible {outline:3px solid #ff765e;outline-offset:3px}
+@media (max-width:640px){.petday-admin-mode > section {padding:16px!important}.petday-admin-mode .petday-admin-tabs {top:56px}.petday-booking-card{padding:15px}.petday-admin-mode > section h2{font-size:1.2rem}}
+
+/* V6.28 cancellation workflow stays in appointment workspace only. */
+.petday-admin-mode[data-admin-tab="today"] > #admin-cancellations,
+.petday-admin-mode[data-admin-tab="people"] > #admin-cancellations,
+.petday-admin-mode[data-admin-tab="finance"] > #admin-cancellations,
+.petday-admin-mode[data-admin-tab="support"] > #admin-cancellations {display:none!important}
+[data-view="appointments"][data-customer-tab="payments"] > #customer-cancellations,
+[data-view="appointments"][data-customer-tab="refunds"] > #customer-cancellations,
+[data-view="appointments"][data-customer-tab="reviews"] > #customer-cancellations {display:none!important}
+#customer-cancellations textarea,#admin-cancellations textarea{resize:vertical}
+@media(max-width:640px){#customer-cancellations,#admin-cancellations{padding:18px!important}}
+/* PetDay V6.28: calm, focused request cards; no additional primary navigation. */
+#customer-cancellations,#admin-cancellations{
+  border:1px solid #e3eaf4;
+  box-shadow:0 12px 34px rgba(20,43,85,.055);
+}
+#customer-cancellations article,#admin-cancellations article{
+  transition:border-color .18s, box-shadow .18s;
+}
+#customer-cancellations article:hover,#admin-cancellations article:hover{
+  border-color:#bfd0e6;
+  box-shadow:0 6px 16px rgba(20,43,85,.055);
+}
+#customer-cancellations button:focus-visible,#admin-cancellations button:focus-visible,
+#customer-cancellations textarea:focus-visible,#admin-cancellations textarea:focus-visible{
+  outline:3px solid #ff765e;outline-offset:2px;
+}
+
+/* V6.29 – focused customer action center and compact appointment journey */
+.petday-action-center{box-shadow:0 12px 36px rgba(20,43,85,.055)}
+.petday-action-tile{transition:border-color .18s,background-color .18s,transform .18s}
+.petday-action-tile:hover{transform:translateY(-2px)}
+.petday-action-center,.petday-customer-workspace{scroll-margin-top:130px}
+@media(max-width:639px){.petday-action-center{padding:17px}.petday-action-tile{min-height:114px}}
+@media(prefers-reduced-motion:reduce){.petday-action-tile{transition:none}.petday-action-tile:hover{transform:none}}
+
+/* V6.30: calm, accessible booking journey and advanced operations filters */
+.petday-journey {padding:14px 15px;background:linear-gradient(110deg,#f4f8fe,#fff);border:1px solid #e0eaf6;border-radius:15px}
+.petday-journey-steps {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0;padding:0;list-style:none;gap:5px}
+.petday-journey-steps li {display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;font-size:11px;line-height:1.3;color:#8e9bae;font-weight:650}
+.petday-journey-dot {display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#e8edf6;color:#66768f;font-weight:800}
+.petday-journey-steps .is-current {color:#142b55}
+.petday-journey-steps .is-current .petday-journey-dot {background:#ff765e;color:#fff;box-shadow:0 0 0 4px #ffede8}
+.petday-journey-steps .is-done {color:#265b86}
+.petday-journey-steps .is-done .petday-journey-dot {background:#d6eaf9;color:#265b86}
+.petday-journey-payment,.petday-journey-muted {margin-top:11px;font-size:11px;color:#64748b}
+.petday-journey-muted {margin:0}
+.petday-advanced-filters summary::marker{color:#ff765e}
+.petday-advanced-filters :is(input,select):focus-visible {outline:2px solid #ff765e;outline-offset:2px}
+@media(max-width:480px){.petday-journey{padding:12px}.petday-journey-steps li{font-size:10px}.petday-journey-dot{width:22px;height:22px}}
+@media(prefers-reduced-motion:reduce){.petday-journey *{transition:none!important}}
+
+/* V6.31: dedicated finance operations lane. */
+.petday-finance-workbench article{transition:border-color .16s ease,box-shadow .16s ease}
+.petday-finance-workbench article:hover{border-color:#b7cde5;box-shadow:0 10px 25px rgba(20,43,85,.07)}
+.petday-finance-workbench input:focus-visible,.petday-finance-workbench select:focus-visible{outline:2px solid #ff765e;outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.petday-finance-workbench article{transition:none}}
+
+/* V6.32 — compact daily dispatch dashboard */
+.petday-daily-operations { scroll-margin-top: 116px; }
+.petday-agenda-row { transition: border-color .16s ease, box-shadow .16s ease; }
+.petday-agenda-row:hover { border-color:#ffad98; box-shadow:0 8px 25px rgba(20,43,85,.06); }
+.petday-daily-operations :is(button,input,select):focus-visible { outline:3px solid #ff765e; outline-offset:2px; }
+@media(max-width:640px) { .petday-daily-operations { padding:18px; } .petday-agenda-row { padding:14px; } }
+@media(prefers-reduced-motion:reduce) { .petday-agenda-row { transition:none; } }
+
+/* V6.33 compact operations view */
+.petday-priority-panel { background: linear-gradient(155deg,#fff 0%,#fbfdff 75%,#f5f9fe 100%); }
+.petday-priority-row { transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.petday-priority-row:hover {border-color:#b7cae4;box-shadow:0 8px 22px rgba(20,43,85,.06);transform:translateY(-1px);}
+@media(max-width:640px){.petday-priority-panel{padding:17px}.petday-priority-row>button{width:100%}}
+@media(prefers-reduced-motion:reduce){.petday-priority-row{transition:none}.petday-priority-row:hover{transform:none}}
+
+/* V6.34: compact, accessible operations disclosures */
+.petday-optional-tools{border:1px solid #DFE8F4;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 8px 24px rgba(20,43,85,.035)}
+.petday-optional-tools > summary{cursor:pointer;list-style:none;padding:18px 22px;font-size:15px;font-weight:800;color:#142B55;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.petday-optional-tools > summary::-webkit-details-marker{display:none}
+.petday-optional-tools > summary::after{content:'+';display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#ECF4FC;font-size:20px;flex-shrink:0}
+.petday-optional-tools[open] > summary::after{content:'−'}
+.petday-optional-tools > summary span{font-size:12px;font-weight:500;color:#64748b;margin-left:auto}
+.petday-optional-tools > section{border:0!important;box-shadow:none!important;border-top:1px solid #E6EDF7!important;border-radius:0!important;margin:0!important}
+.petday-optional-tools > summary:focus-visible,.petday-handover button:focus-visible{outline:3px solid #FF765E;outline-offset:-3px}
+@media(max-width:640px){.petday-optional-tools > summary{padding:16px;align-items:flex-start}.petday-optional-tools > summary span{max-width:150px;text-align:right}}
+@media(prefers-reduced-motion:reduce){.petday-handover *{scroll-behavior:auto}}
+
+/* V6.35: clear visual hierarchy and accessible focus for secondary operational actions. */
+.petday-auth-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e1eaf7;
+  box-shadow: 0 22px 68px rgba(20,43,85,.09);
+}
+.petday-auth-card::before {
+  content: '';
+  display: block;
+  height: 5px;
+  margin: -32px -32px 28px;
+  background: linear-gradient(90deg,#142b55 0%,#4077bd 56%,#ff765e 100%);
+}
+.petday-auth-card label { color:#20375b; }
+.petday-auth-card input:focus-visible { outline: 2px solid #ff765e; outline-offset: 2px; }
+.petday-admin-disclosure { overflow: clip; transition: border-color .15s, box-shadow .15s; }
+.petday-admin-disclosure[open] { border-color: #cbdcf3; box-shadow: 0 12px 26px rgba(20,43,85,.045); }
+.petday-admin-disclosure > summary { list-style: none; }
+.petday-admin-disclosure > summary::-webkit-details-marker { display: none; }
+.petday-admin-disclosure > summary:hover { background: #f6f9fe; }
+.petday-admin-disclosure > summary:focus-visible { outline: 2px solid #ff765e; outline-offset: -3px; }
+.petday-admin-disclosure[open] > summary { border-bottom: 1px solid #e3ecf8; }
+.petday-admin-disclosure[open] > summary span { transform: rotate(180deg); }
+.petday-admin-disclosure > summary span { transition: transform .15s; }
+.petday-admin-disclosure > section { box-shadow: none; border: 0; }
+@media (max-width: 640px) {
+  .petday-admin-disclosure > summary { font-size: 14px; }
+  .petday-auth-card { padding: 22px; }
+  .petday-auth-card::before { margin: -22px -22px 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .petday-admin-disclosure, .petday-admin-disclosure > summary span { transition: none; }
+}
