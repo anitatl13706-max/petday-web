@@ -1,3 +1,5 @@
+import {backendAssetUrl} from './apiFetch';
+import {apiFetch} from './apiFetch';
 import {TransferDetailsForm, type SenderInfo} from './TransferDetailsForm';
 import {useEffect,useMemo,useState} from 'react';
 
@@ -14,7 +16,7 @@ type Order={
 const money=(n:number)=>Number(n).toLocaleString('vi-VN')+'đ';
 const orderStatusVi:Record<string,string>={pending:'Chờ xác nhận',confirmed:'Đã xác nhận',ready:'Sẵn sàng nhận/giao',shipping:'Đang giao hàng',delivery_failed:'Giao thất bại',return_pending:'Chờ hàng hoàn',returned:'Đã nhận hàng hoàn',completed:'Hoàn tất',cancelled:'Đã hủy'};
 const auth=(token:string)=>({'Content-Type':'application/json',Authorization:'Bearer '+token});
-async function request(path:string,token:string,method='GET',body?:unknown){const r=await fetch('/api'+path,{method,headers:auth(token),body:body===undefined?undefined:JSON.stringify(body)});const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||'Không thể xử lý yêu cầu');return data;}
+async function request(path:string,token:string,method='GET',body?:unknown){const r=await apiFetch('/api'+path,{method,headers:auth(token),body:body===undefined?undefined:JSON.stringify(body)});const data=await r.json().catch(()=>({}));if(!r.ok)throw Error(data.error||'Không thể xử lý yêu cầu');return data;}
 const panel='rounded-3xl border border-[#DFE8F4] bg-white p-5 shadow-sm';
 const categoryTone=(category:string)=>category.includes('Di chuyển')?'from-[#F3EDFF] to-[#F3EFFF]':category.includes('Vệ sinh')?'from-[#E4F4FB] to-[#E6F4FB]':category.includes('Thức ăn')?'from-[#FFF3E6] to-[#FFEEE0]':'from-[#FFF0E8] to-[#FFE9DE]';
 const categoryInfo:{name:string;icon:string;blurb:string;image:string}[]=[

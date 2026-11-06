@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import {TransferDetailsForm, type SenderInfo} from './TransferDetailsForm';
 import {useEffect,useState} from 'react';
 
@@ -5,7 +6,7 @@ type Booking={code:string;total:number;paymentMethod?:string;paymentStatus:strin
 type BankRecipient={enabled:boolean;demo?:boolean;bankName?:string;accountHolder?:string;accountNumber?:string};
 type Notice={code:string;customerReference?:string;customerNote?:string;senderBank?:string;senderName?:string;createdAt?:string;updatedAt?:string;paymentStatus:string;customerName?:string;total?:number};
 const cash=(n:number)=>Number(n||0).toLocaleString('vi-VN')+'đ';
-async function request(path:string,token:string,method='GET',body?:object){const response=await fetch('/api'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||data.message||'Lỗi API '+response.status);return data;}
+async function request(path:string,token:string,method='GET',body?:object){const response=await apiFetch('/api'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||data.message||'Lỗi API '+response.status);return data;}
 export function CustomerBankNotices({token,bookings,focusCode}:{token:string;bookings:Booking[];focusCode?:string}){
  const [bank,setBank]=useState<BankRecipient|null>(null);const [notices,setNotices]=useState<Notice[]>([]);const [ref,setRef]=useState<Record<string,string>>({});const [note,setNote]=useState<Record<string,string>>({});const [error,setError]=useState('');const [message,setMessage]=useState('');const [busy,setBusy]=useState('');
  const refresh=()=>request('/my/transfer-notices',token).then(setNotices).catch(e=>setError(e.message));

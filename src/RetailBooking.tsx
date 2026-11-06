@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import {useEffect,useState} from 'react';
 export type RetailItem={id:number;name:string;category:string;description:string;price:number;stock:number;active:boolean};
 export type RetailChoice={id:number;quantity:number};
@@ -32,9 +33,9 @@ export function AdminRetailCatalog({token}:{token:string}){
  const [selected,setSelected]=useState<number|null>(null),[showCreate,setShowCreate]=useState(false);
  const [draft,setDraft]=useState({name:'',category:RETAIL_CATEGORIES[0],description:'',price:1000,stock:0,active:true});
  const input='w-full min-w-0 rounded-xl border border-[#DDE8F6] bg-white px-3 py-2.5 text-sm text-[#142B55] focus:border-[#FF765E] focus:outline-none';
- const load=async()=>{try{const r=await fetch('/api/admin/retail/products',{headers:{Authorization:'Bearer '+token}});const data=await r.json();if(!r.ok)throw Error(data.error||'Không tải được sản phẩm');setItems(data);setEdits(Object.fromEntries(data.map((x:RetailItem)=>[x.id,x])))}catch(e){setError(String(e))}};
+ const load=async()=>{try{const r=await apiFetch('/api/admin/retail/products',{headers:{Authorization:'Bearer '+token}});const data=await r.json();if(!r.ok)throw Error(data.error||'Không tải được sản phẩm');setItems(data);setEdits(Object.fromEntries(data.map((x:RetailItem)=>[x.id,x])))}catch(e){setError(String(e))}};
  useEffect(()=>{load()},[token]);
- async function request(path:string,method:string,body?:object){setBusy(true);setError('');setMessage('');try{const r=await fetch('/api/admin/retail/products'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw Error(d.error||'Không thể xử lý sản phẩm');setMessage(method==='DELETE'?'Đã xóa sản phẩm chưa có giao dịch.':'Đã lưu sản phẩm thành công.');await load();if(method==='DELETE')setSelected(null);if(method==='POST'){setShowCreate(false);setDraft({name:'',category:RETAIL_CATEGORIES[0],description:'',price:1000,stock:0,active:true})}}catch(e){setError(String(e))}finally{setBusy(false)}}
+ async function request(path:string,method:string,body?:object){setBusy(true);setError('');setMessage('');try{const r=await apiFetch('/api/admin/retail/products'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});const d=await r.json();if(!r.ok)throw Error(d.error||'Không thể xử lý sản phẩm');setMessage(method==='DELETE'?'Đã xóa sản phẩm chưa có giao dịch.':'Đã lưu sản phẩm thành công.');await load();if(method==='DELETE')setSelected(null);if(method==='POST'){setShowCreate(false);setDraft({name:'',category:RETAIL_CATEGORIES[0],description:'',price:1000,stock:0,active:true})}}catch(e){setError(String(e))}finally{setBusy(false)}}
  const active=items.filter(x=>x.active).length;
  const filtered=items.filter(p=>(category==='Tất cả'||p.category===category)&&(availability==='all'||(availability==='active'?p.active:!p.active))&&(!query||[p.name,String(p.id),p.category].join(' ').toLowerCase().includes(query.toLowerCase())));
  const chosen=selected==null?null:edits[selected];

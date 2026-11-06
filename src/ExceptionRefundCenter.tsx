@@ -1,9 +1,10 @@
+import {apiFetch} from './apiFetch';
 import {useEffect,useState} from 'react';
 
 type Refund={id:number;code:string;customerName?:string;amount:number;total:number;reason:string;status:string;adminNote?:string;refundReference?:string;createdAt?:string;completedAt?:string;updatedAt?:string;appointmentDate?:string;appointmentSlot?:string;branch?:string;orderCreatedAt?:string;bookingStatus?:string;orderStatus?:string};
 const money=(n:number)=>Number(n||0).toLocaleString('vi-VN')+'đ';
 const dateLabel=(d?:string)=>d?new Date(d).toLocaleString('vi-VN',{dateStyle:'short',timeStyle:'short'}):'—';
-async function api(path:string,token:string,method='GET',body?:object){const r=await fetch('/api'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Không xử lý được yêu cầu');return d;}
+async function api(path:string,token:string,method='GET',body?:object){const r=await apiFetch('/api'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Không xử lý được yêu cầu');return d;}
 export function ExceptionRefundCenter({token}:{token:string}){
  const [tab,setTab]=useState<'service'|'retail'>('service');
  const [retail,setRetail]=useState<Refund[]>([]),[service,setService]=useState<Refund[]>([]),[notes,setNotes]=useState<Record<number,string>>({}),[amounts,setAmounts]=useState<Record<number,string>>({}),[refs,setRefs]=useState<Record<number,string>>({});

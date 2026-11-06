@@ -10,7 +10,8 @@
     "format": "oxfmt",
     "check:syntax": "node scripts/check-syntax.mjs",
     "check:auth-guard": "node scripts/check-auth-guard.mjs",
-    "check:configuration": "node scripts/check-configuration.mjs"
+    "check:configuration": "node scripts/check-configuration.mjs",
+    "check:shop-assets": "node scripts/check-shop-assets.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

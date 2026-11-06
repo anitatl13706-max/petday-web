@@ -1,10 +1,11 @@
+import {apiFetch} from './apiFetch';
 import {useEffect,useMemo,useState} from 'react';
 import {AdminBankNotices} from './BankTransferWorkflow';
 
 type RetailOrder={code:string;total:number;status:string;payment_status?:string;paymentStatus?:string;payment_method?:string;paymentMethod?:string;customer_name?:string;customerName?:string;created_at?:string;createdAt?:string;fulfillment_method?:string;fulfillmentMethod?:string};
 type TransferNotice={code:string;senderBank?:string;senderName?:string;customerReference?:string;customerNote?:string;updatedAt?:string};
 const cash=(v:number)=>Number(v||0).toLocaleString('vi-VN')+'đ';
-async function get(path:string,token:string,method='GET',body?:object){const r=await fetch('/api'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Không thể xử lý yêu cầu');return d;}
+async function get(path:string,token:string,method='GET',body?:object){const r=await apiFetch('/api'+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||'Không thể xử lý yêu cầu');return d;}
 export function AdminRetailPayments({token,onConfirmed}:{token:string;onConfirmed:()=>Promise<void>|void}){
  const [orders,setOrders]=useState<RetailOrder[]>([]),[notices,setNotices]=useState<TransferNotice[]>([]),[demo,setDemo]=useState(false);
  const [mode,setMode]=useState<'bank_transfer'|'cash'>('bank_transfer');

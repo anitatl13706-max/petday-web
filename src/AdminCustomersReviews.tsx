@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import {useEffect,useState} from 'react';
 type Customer={id:number;fullName:string;email:string;petCount:number;bookingCount:number;recordedPaid:string;createdAt:string};
 type Review={id:number;rating:number;comment:string;moderationStatus:'pending'|'approved'|'rejected';moderationNote:string;createdAt:string;code:string;service:string;customerName:string};
@@ -5,7 +6,7 @@ const frame='rounded-3xl border border-[#DFE8F4] bg-white p-5 shadow-sm sm:p-7';
 const input='w-full rounded-xl border border-[#DFE8F4] bg-white px-4 py-3 text-sm outline-none focus:border-[#FF765E]';
 export default function AdminCustomersReviews({token,mode}:{token:string;mode:'customers'|'reviews'}){
  const [rows,setRows]=useState<Customer[]>([]),[reviews,setReviews]=useState<Review[]>([]),[query,setQuery]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[notes,setNotes]=useState<Record<number,string>>({});
- async function request(url:string,method='GET',payload?:object){const response=await fetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(payload?{body:JSON.stringify(payload)}:{})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error||'HTTP '+response.status);return data;}
+ async function request(url:string,method='GET',payload?:object){const response=await apiFetch('/api'+url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(payload?{body:JSON.stringify(payload)}:{})});const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error||'HTTP '+response.status);return data;}
  async function load(){setBusy(true);setError('');try{if(mode==='customers')setRows(await request('/admin/customers?q='+encodeURIComponent(query)));else setReviews(await request('/admin/reviews'));}catch(e){setError(e instanceof Error?e.message:'Không tải được dữ liệu');}finally{setBusy(false)}}
  useEffect(()=>{load()},[mode,token]);
  async function moderate(id:number,status:'approved'|'rejected'){setBusy(true);setError('');setNotice('');try{await request('/admin/reviews/'+id,'PATCH',{status,note:notes[id]||''});setReviews(await request('/admin/reviews'));setNotice(status==='approved'?'Đã duyệt đánh giá công khai.':'Đã ẩn đánh giá và lưu lý do.');}catch(e){setError(e instanceof Error?e.message:'Thao tác thất bại')}finally{setBusy(false)}}

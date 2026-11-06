@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import {useEffect,useState,type FormEvent} from 'react';
 
 type IntakeBooking={code:string;status:string;petName:string;date:string;slot:string;intakeEmergencyPhone?:string;intakeHealthAlerts?:string;intakeCareInstructions?:string;intakeUpdatedAt?:string};
@@ -11,7 +12,7 @@ export default function PreArrivalCard({booking,token,onSaved}:{booking:IntakeBo
  useEffect(()=>{setPhone(booking.intakeEmergencyPhone||'');setHealth(booking.intakeHealthAlerts||'');setInstructions(booking.intakeCareInstructions||'');},[booking.code,booking.intakeUpdatedAt]);
  const editable=['Đang chờ xác nhận','Đã xác nhận'].includes(booking.status);
  async function submit(e:FormEvent){e.preventDefault();setError('');setNotice('');setSaving(true);
-  try{const r=await fetch('/api/bookings/'+encodeURIComponent(booking.code)+'/intake',{method:'PUT',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({emergencyPhone:phone,healthAlerts:health,careInstructions:instructions,ownerConfirmed:confirmed})});
+  try{const r=await apiFetch('/api/bookings/'+encodeURIComponent(booking.code)+'/intake',{method:'PUT',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({emergencyPhone:phone,healthAlerts:health,careInstructions:instructions,ownerConfirmed:confirmed})});
    const body=await r.json().catch(()=>({}));if(!r.ok)throw Error(body.error||'Không lưu được thông tin trước khi đến.');await onSaved();setNotice('Đã lưu thông tin cho nhân viên tiếp nhận.');setConfirmed(false);
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setSaving(false)}
  }

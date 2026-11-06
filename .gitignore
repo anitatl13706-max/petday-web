@@ -1,15 +1,24 @@
-﻿node_modules/
+node_modules/
 dist/
-.env
-.env.*
-!.env.example
-*.backup
-*.dump
+build/
+.cache/
+.env*
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+*-debug.log*
+logs/
 *.log
-.DS_Store
+.claude-replay.*
+.tmp-*
+/.figma/design-context/
 
-# Files excluded pending security review
-docs/V6_13_RECOVERY_AND_PAYMENT.md
-docs/V6_36_REAL_FIXES_AND_MIGRATION.md
-server/.env.example
-server/test/petdayAi.test.js
+# Platform-managed agentplat state, not project source. In the
+# client-initiated single-repo workspace layout (make's `Path: "."` spec) the
+# repo root IS the workspace root, so these land inside this repo rather than
+# beside it.
+/.plugins/
+/.opencode-skills/
+
+.vercel
+.env*

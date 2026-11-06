@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import {useCallback,useEffect,useState} from 'react';
 
 type Probe = {key:string;name:string;path:string;ok:boolean|null;detail:string};
@@ -17,7 +18,7 @@ export default function SystemCheck(){
   const checks=await Promise.all(targets.map(async(t):Promise<Probe>=>{
    const ctrl=new AbortController();const timeout=setTimeout(()=>ctrl.abort(),6500);
    try {
-    const res=await fetch(t.path,{signal:ctrl.signal,headers:{Accept:'application/json'}});
+    const res=await apiFetch(t.path,{signal:ctrl.signal,headers:{Accept:'application/json'}});
     const obj=await res.json();
     let ok=res.ok;
     if(t.key==='api')ok=ok&&obj.ok===true;

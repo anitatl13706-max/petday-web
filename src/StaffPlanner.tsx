@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import {useEffect,useState} from 'react';
 
 type Staff={id:number|string;fullName:string;branch:string;active:boolean};
@@ -8,7 +9,7 @@ const primary='rounded-xl bg-[#142B55] px-4 py-2.5 text-sm font-semibold text-wh
 export default function StaffPlanner({token,bookings,onAssigned}:{token:string;bookings:BookingLite[];onAssigned:()=>Promise<void>}){
  const [staff,setStaff]=useState<Staff[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [name,setName]=useState(''),[branch,setBranch]=useState(branches[0]),[editing,setEditing]=useState<Record<number,{fullName:string;branch:string}>>({}),[selection,setSelection]=useState<Record<string,string>>({});const [assignmentFeedback,setAssignmentFeedback]=useState<Record<string,string>>({});
- async function api(path:string,method='GET',payload?:object){const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(payload?{body:JSON.stringify(payload)}:{})});const out=await r.json().catch(()=>({error:'API không trả dữ liệu hợp lệ'}));if(!r.ok)throw Error(out.error||'HTTP '+r.status);return out;}
+ async function api(path:string,method='GET',payload?:object){const r=await apiFetch('/api'+path,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},...(payload?{body:JSON.stringify(payload)}:{})});const out=await r.json().catch(()=>({error:'API không trả dữ liệu hợp lệ'}));if(!r.ok)throw Error(out.error||'HTTP '+r.status);return out;}
  async function reload(){const data=await api('/admin/staff');setStaff(data.members);setLoading(false);}
  useEffect(()=>{let cancelled=false;api('/admin/staff').then(data=>data.members?.length?data:api('/admin/staff/defaults','POST').then(()=>api('/admin/staff'))).then(data=>{if(!cancelled){setStaff(data.members||[]);setLoading(false)}}).catch(e=>{if(!cancelled){setError(e.message);setLoading(false)}});return()=>{cancelled=true}},[token]);
  async function run(task:()=>Promise<unknown>,message:string){setBusy(true);setError('');setNotice('');try{await task();await reload();await onAssigned();setNotice(message)}catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}}

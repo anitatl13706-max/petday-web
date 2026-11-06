@@ -1,3 +1,4 @@
+import {apiFetch} from './apiFetch';
 import SystemCheck from './SystemCheck';
 import {servicePackages} from './servicePackages';
 import SupportWidget from './SupportWidget';
@@ -104,7 +105,7 @@ function Header({ page }: { page: Page }) {
   const [open, setOpen] = useState(false);
   const [accountOpen,setAccountOpen] = useState(false);
   const [viewer,setViewer] = useState<{full_name:string;role:string}|null>(null);
-  useEffect(()=>{const token=sessionStorage.getItem('petday_token_v3')||sessionStorage.getItem('petday_api_token');if(!token){setViewer(null);return;}fetch('/api/me',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.ok?r.json():null).then(setViewer).catch(()=>setViewer(null));},[page]);
+  useEffect(()=>{const token=sessionStorage.getItem('petday_token_v3')||sessionStorage.getItem('petday_api_token');if(!token){setViewer(null);return;}apiFetch('/api/me',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.ok?r.json():null).then(setViewer).catch(()=>setViewer(null));},[page]);
   const go = (target: Page, section?:string) => { setOpen(false); if(section)sessionStorage.setItem('petday_focus_section',section); navigateTo(target); if(section)window.dispatchEvent(new Event('petday:focus')); };
   return (
     <>
@@ -225,7 +226,7 @@ function BookingBar() {
 
 function usePublishedServices(){
  const [published,setPublished]=useState<any[]|null>(null);
- useEffect(()=>{let live=true;fetch('/api/public/services').then(async r=>{if(!r.ok)throw Error('catalog unavailable');return r.json()}).then((items:any[])=>{if(live&&Array.isArray(items))setPublished(items)}).catch(()=>{});return()=>{live=false};},[]);
+ useEffect(()=>{let live=true;apiFetch('/api/public/services').then(async r=>{if(!r.ok)throw Error('catalog unavailable');return r.json()}).then((items:any[])=>{if(live&&Array.isArray(items))setPublished(items)}).catch(()=>{});return()=>{live=false};},[]);
  return services.filter(s=>published===null||published.some(x=>x.name===s.name)).map(s=>{const live=published?.find(x=>x.name===s.name);return {...s,price:live?'Từ '+Number(live.basePrice).toLocaleString('vi-VN')+'đ':s.price};});
 }
 function HomePage() {
