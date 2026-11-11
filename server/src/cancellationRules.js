@@ -1,8 +1,8 @@
 // Pure rules for cancellation requests. Payment/refunds remain a separate workflow.
-export function cancellationRequestIssue({role,status,bookingDate,today,alreadyPending,paid=false}) {
+export function cancellationRequestIssue({role,status,bookingDate,today,alreadyPending,paid=false,allowSameDay=false}) {
  if(role!=='customer')return 'Chỉ khách hàng được gửi yêu cầu.';
  if(!(['Đã xác nhận'].includes(status)||(paid&&status==='Đang chờ xác nhận')))return 'Chỉ có thể hủy lịch chưa bắt đầu chăm sóc.';
- if(bookingDate<=today&&!paid)return 'Yêu cầu hủy phải gửi trước ngày hẹn.';
+ if(bookingDate<=today&&!paid&&!allowSameDay)return 'Yêu cầu hủy phải gửi trước ngày hẹn.';
  if(alreadyPending)return 'Đã có yêu cầu hủy chờ xử lý.';
  return null;
 }

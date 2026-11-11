@@ -10,7 +10,6 @@ export function handoverItems(bookings, asOf) {
   if(status==='Không đến') {if(paid)entry('finance-review',0,'Lịch vắng mặt đã thu tiền','Kiểm tra chính sách và sổ thu; không tự hủy giao dịch.');continue;}
   if(day<asOf && ['Đang chờ xác nhận','Đã xác nhận','Đang thực hiện'].includes(status))entry('overdue',0,'Lịch quá hạn chưa xử lý','Xác minh tình trạng thực tế và ghi nhận quyết định phù hợp.');
   if(day<=asOf && status==='Đang chờ xác nhận')entry('approval',1,'Chưa xác nhận lịch','Kiểm tra điều kiện dịch vụ và liên hệ khách.');
-  if(day===asOf && ['Đã xác nhận','Đang thực hiện'].includes(status) && !b.assignedStaff && !b.assignedStaffId)entry('staff',2,'Chưa phân công nhân viên','Kiểm tra ca và phân công người phụ trách.');
   if(status==='Hoàn tất' && !paid)entry('payment',3,'Hoàn tất nhưng chưa thu tiền','Đối soát khoản đã nhận trước khi xác nhận thu.');
  }
  return result.sort((a,b)=>a.priority-b.priority||a.date.localeCompare(b.date)||a.slot.localeCompare(b.slot)||a.code.localeCompare(b.code)||a.kind.localeCompare(b.kind));

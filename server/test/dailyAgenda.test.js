@@ -5,7 +5,11 @@ const rows=[{code:'PD2',date:'2026-11-04',slot:'13:30',branch:'A',status:'Đã x
 test('daily agenda filters date and excludes cancelled',()=>assert.deepEqual(dailyAgenda(rows,'2026-11-04').map(x=>x.code),['PD1','PD2']));
 test('daily agenda filters branch',()=>assert.deepEqual(dailyAgenda(rows,'2026-11-04','B'),[]));
 test('daily agenda rejects invalid day input',()=>assert.deepEqual(dailyAgenda(rows,'oops'),[]));
-test('pending booking needs confirmation but not assignment',()=>{const f=agendaFlags(rows[1]);assert.equal(f.needsConfirmation,true);assert.equal(f.needsStaff,false)});
-test('confirmed booking without staff requires assignment',()=>assert.equal(agendaFlags(rows[0]).needsStaff,true));
+test('pending booking needs confirmation',()=>{const f=agendaFlags(rows[1]);assert.equal(f.needsConfirmation,true);assert.equal('needsStaff' in f,false)});
+test('confirmed booking has no staff assignment blocker',()=>assert.equal('needsStaff' in agendaFlags(rows[0]),false));
 test('canceled booking never prompts payment',()=>assert.equal(agendaFlags(rows[2]).needsPayment,false));
 test('completed booking with paid status does not prompt payment',()=>assert.equal(agendaFlags({...rows[3],paymentStatus:'Đã thanh toán'}).needsPayment,false));
+
+test('completed and no-show appointments are absent from daily work queue',()=>assert.deepEqual(dailyAgenda([...rows,{...rows[0],code:'DONE',status:'Hoàn tất'},{...rows[0],code:'NOSHOW',status:'Không đến'}],'2026-11-04').map(x=>x.code),['PD1','PD2']));
+
+test('completed and no-show appointments are absent from daily work queue',()=>assert.deepEqual(dailyAgenda([...rows,{...rows[0],code:'DONE',status:'Hoàn tất'},{...rows[0],code:'NOSHOW',status:'Không đến'}],'2026-11-04').map(x=>x.code),['PD1','PD2']));

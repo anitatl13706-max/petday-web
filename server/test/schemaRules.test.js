@@ -7,10 +7,10 @@ test('detects missing new packages in old CHECK definition',()=>{
  assert.ok(missingServiceNames(legacy,Object.keys(services)).includes('Spa phục hồi lông'));
  assert.ok(!missingServiceNames(legacy,Object.keys(services)).includes('Grooming toàn diện'));
 });
-test('all eight allowed packages have no missing names',()=>{
+test('all active allowed packages have no missing names',()=>{
  const def='CHECK (service IN ('+Object.keys(services).map(s=>"'"+s+"'").join(',')+'))';
  assert.deepEqual(missingServiceNames(def,Object.keys(services)),[]);
 });
 test('no constraint is never reported as ready',()=>{
- assert.equal(missingServiceNames('',Object.keys(services)).length,8);
+ assert.equal(missingServiceNames('',Object.keys(services)).length,Object.keys(services).length);
 });

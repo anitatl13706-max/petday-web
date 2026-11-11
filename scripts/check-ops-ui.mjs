@@ -1,0 +1,17 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const portal=readFileSync(new URL('../src/Portal.tsx',import.meta.url),'utf8');
+const taxi=readFileSync(new URL('../src/TaxiLegPanel.tsx',import.meta.url),'utf8');
+const invoice=readFileSync(new URL('../src/BookingFinancialSnapshot.tsx',import.meta.url),'utf8');
+assert.match(portal,/Nhóm lịch hẹn/);
+for(const label of ['Đang xử lý','Chờ duyệt','Đang phục vụ','Hoàn tất','Đã hủy \/ No-show']) assert.ok(portal.includes(label),label);
+assert.match(portal,/Khách không đến · mở xác minh No-show/);
+assert.match(portal,/Hủy lịch · mở biểu mẫu và chọn lý do/);
+assert.match(portal,/BookingFinancialSnapshot code=\{b.code\}/);
+assert.match(taxi,/CẦN XỬ LÝ HỦY/);
+assert.ok(taxi.includes("leg.customerPlan!=='ask_cancel'&&<button")&&taxi.includes('Hoàn tất · Đã bàn giao pet'));
+assert.match(taxi,/defaultOpen=\{leg.customerPlan==='ask_cancel'/);
+assert.match(taxi,/Lịch sử Pet Taxi/);
+assert.match(invoice,/onToggle=\{e=>\{if\(e.currentTarget.open\)void load\(\);\}\}/);
+assert.match(invoice,/Nếu chưa thanh toán, khoản miễn\/giảm Taxi đã được trừ trên hóa đơn/);
+console.log('10 nhóm kiểm tra bố cục, ưu tiên Taxi và hóa đơn: ĐẠT');

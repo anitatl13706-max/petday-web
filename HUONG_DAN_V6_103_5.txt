@@ -1,0 +1,54 @@
+PETDAY V6.103.5 — CHÍNH SÁCH HỦY LỊCH VÀ HOÀN TIỀN
+================================================
+Dựa trên V6.103.4 (QR gọn, theo dõi giao hàng, đổi lịch).
+
+CHÍNH SÁCH ĐƯỢC TRIỂN KHAI (đề xuất PetDay 2.0):
+- Gửi yêu cầu hủy trước hơn 24 giờ: hoàn dự kiến 100% khoản đã thu.
+- Còn hơn 3 giờ đến đúng 24 giờ: hoàn dự kiến 80% khoản đã thu (làm tròn tới đồng).
+- Còn từ 0 đến đúng 3 giờ: yêu cầu vẫn được gửi để Admin xét, mặc định 0% hoàn.
+- Từ giờ bắt đầu dịch vụ trở đi: không gửi yêu cầu hủy thông thường.
+- Đúng 24 giờ: 80%; đúng 3 giờ: 0% mặc định.
+- Nếu chưa ghi nhận thanh toán: không tạo yêu cầu hoàn tiền.
+- Riêng hủy sát giờ: Admin có thể ghi số tiền hoàn ngoại lệ (0..tổng đã thu)
+  và nêu lý do, chỉ lúc CHẤP THUẬN yêu cầu hủy. Số tiền này tạo hồ sơ chờ
+  hoàn, không xác nhận đã chuyển tiền.
+- Admin chủ động hủy vì không thể phục vụ vẫn duy trì logic hoàn toàn bộ.
+- Chính sách theo thời điểm KHÁCH GỬI yêu cầu, không theo lúc Admin duyệt.
+- Phạm vi tiền hoàn hiện dựa trên tổng tiền đã ghi nhận của lịch (gồm khoản
+  phụ trội nếu được tính chung trong lịch); trước khi sản phẩm vận hành thực
+  tế cần ban hành chính sách tách phí Taxi/sản phẩm nếu muốn áp dụng khác.
+
+ĐIỂM SỬA:
+- server/src/cancellationPolicy.mjs: quy tắc mốc giờ, phí hoàn.
+- server/src/server.js: tạo/duyệt hủy; các đường tạo/duyệt hoàn, đối soát
+  hồ sơ thiếu đồng bộ theo cùng chính sách; chống hoàn vượt, hoàn trùng.
+- server/src/cancellationRules.js: cho phép gửi yêu cầu trong ngày hẹn nhưng
+  trước giờ bắt đầu (bên cạnh các quy tắc chặn lịch đã bắt đầu).
+- src/Portal.tsx: Customer thấy mức hoàn dự kiến; Admin thấy chính sách lúc
+  gửi yêu cầu và có thể ghi khoản hoàn ngoại lệ sát giờ.
+- server/test/v61035_cancellationPolicy.test.js: kiểm thử các điểm biên.
+
+CHẠY LOCALHOST:
+1) Giải nén ZIP, mở thư mục PETDAY_OFFICIAL.
+2) Sao chép file server/.env từ bản V6.103.4 đang hoạt động; KHÔNG đăng tải .env.
+3) Backend: cd server ; npm install ; npm start
+4) Frontend: tại PETDAY_OFFICIAL ; npm install ; npm run dev
+5) Dừng các tiến trình PetDay cũ trước khi chạy bản mới.
+6) KHÔNG CẦN SQL MIGRATION MỚI. Khuyến nghị sao lưu PostgreSQL trước khi thử.
+
+KIỂM THỬ GỢI Ý:
+- 25 giờ -> 100%; đúng 24 giờ -> 80%; 12 giờ -> 80%; đúng 3 giờ -> 0%.
+- 1 giờ -> Admin có thể duyệt hủy, không tự tạo hoàn 100%.
+- Admin đặt ngoại lệ sát giờ, kiểm tra hồ sơ chờ hoàn số tiền đã chọn.
+- Admin duyệt hoàn 80% (không bị cưỡng ép 100% bởi quy tắc cũ).
+- Khách không thể yêu cầu hoàn 100% qua endpoint riêng sau hủy 80% hoặc 0%.
+- Không ghi hai khoản hoàn, không hoàn vượt số tiền đã thu.
+- Admin chủ động hủy -> quy tắc hoàn 100% vẫn đúng.
+- Hủy có Pet Taxi, đổi lịch, QR và giao hàng vẫn hoạt động.
+
+KẾT QUẢ KIỂM TRA TẠI MÔI TRƯỜNG TẠO FILE:
+- Backend: 207/207 test node --test đạt.
+- Backend server.js: node --check đạt.
+- Portal.tsx: TypeScript transpile diagnostics: 0.
+- Chưa thực hiện kiểm thử API với PostgreSQL và kiểm thử frontend end-to-end
+  trên máy người dùng; cần kiểm thử thực tế trước khi triển khai online.
