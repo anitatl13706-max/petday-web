@@ -1,0 +1,11 @@
+PetDay V6.104.11.3 - Sửa nút Admin Đề xuất đổi lịch không mở biểu mẫu
+
+Nguyên nhân: Biểu mẫu đề xuất nằm nhầm trong nhánh giao diện chỉ hiển thị cho Customer; nút Admin tìm biểu mẫu theo id nhưng không tìm thấy.
+Đã sửa: Di chuyển biểu mẫu ra ngoài nhánh Customer, giữ nguyên API và quy tắc Customer đồng ý/từ chối. Không có migration SQL.
+
+Cách dùng: Giải nén ZIP, sao chép PETDAY_OFFICIAL/server/.env từ bản V6.104.11.2 cũ sang thư mục server trong bản mới. Chạy 2 terminal:
+- Terminal backend: mở PETDAY_OFFICIAL/server, chạy npm install rồi npm start.
+- Terminal frontend: mở PETDAY_OFFICIAL, chạy npm install rồi npm run dev.
+
+Kiểm tra: Admin -> Lịch hẹn -> lịch Đã xác nhận -> Đề xuất đổi lịch. Biểu mẫu phải hiện ra, nhập ngày/giờ và lý do, gửi. Customer cần đồng ý mới cập nhật ngày giờ.
+Lưu ý: chưa thực hiện build Vite đầy đủ tại môi trường đóng gói (không cài được dependency từ registry).

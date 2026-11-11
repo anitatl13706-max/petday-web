@@ -1,0 +1,19 @@
+PETDAY V6.103.4 — QR CỬA HÀNG VÀ TRẠNG THÁI GIAO HÀNG
+
+Sửa từ bản V6.103.3.
+- Cửa hàng: bỏ bảng nhập ngân hàng/tên/mã giao dịch bên dưới QR; giữ nút xác nhận khi QR còn hạn.
+- API chuyển khoản Cửa hàng: cho gửi thông báo không kèm thông tin ngân hàng, không đánh dấu đã thanh toán. Admin vẫn phải đối soát thực tế và nhập mã giao dịch khi ở chế độ chuyển khoản thật.
+- Khách hàng: tiến trình đơn giao tận nhà/nhận tại quầy, hiển thị ngày giao dự kiến và nút cập nhật; sử dụng status do Admin lưu.
+- Backend: bổ sung deliveryEta vào GET /api/my/retail-orders.
+
+CHẠY: giải nén, sao chép server/.env từ V6.103.3, tắt phiên bản cũ, chạy npm install && npm start trong server; npm install && npm run dev trong PETDAY_OFFICIAL.
+
+RETEST:
+1) Cửa hàng chuyển khoản: chỉ một khối QR, có số tiền/mã đơn, hạn 15 phút và nút Tôi đã chuyển khoản. Không có biểu mẫu bên dưới.
+2) Khách báo chuyển: Admin nhận thông báo nhưng chưa được đánh dấu tiền đã thu; Admin xác nhận riêng.
+3) Admin đổi trạng thái pending → confirmed → ready → shipping → completed; khách nhấn Cập nhật trạng thái trong Lịch sử mua hàng và thấy tiến trình tương ứng.
+4) Đơn pickup: 'ready' là Sẵn sàng nhận; completed là Đã nhận hàng.
+5) Đơn lỗi giao/đơn hủy hiển thị cảnh báo đúng, không đánh dấu giao thành công.
+6) Kiểm tra lại chức năng đổi lịch V6.103.3.
+
+Không chạy migration mới, không sửa dữ liệu production. API /api/my/retail-orders cần cột delivery_eta đã có trong migration 039. Nếu môi trường thiếu, sao lưu DB TEST và áp dụng migration phù hợp sau khi kiểm tra schema.

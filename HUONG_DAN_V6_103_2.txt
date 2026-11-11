@@ -1,0 +1,34 @@
+PETDAY V6.103.2 - SUA LOI DOI LICH LECH NGAY
+
+NGUYEN NHAN
+- Trong V6.103.1, PostgreSQL DATE duoc doc qua JavaScript Date va cat bang toISOString().slice(0,10).
+- Khi Node.js dung mui gio Viet Nam, ngay 2026-12-05 luc 00:00 +07 co the thanh 2026-12-04 theo UTC.
+- Backend co UPDATE bookings nhung date gui vao UPDATE co the da bi lui mot ngay.
+
+DA SUA
+- Su dung PostgreSQL to_char(date,'YYYY-MM-DD') de lay ngay lich khong qua chuyen doi UTC.
+- Ap dung cho yeu cau doi lich moi va buoc Admin phe duyet.
+- Xac nhan lai booking_date va slot ngay sau khi UPDATE; phan hoi API co ngay, gio da luu.
+- Them hien thi ngay gio hien tai tai muc yeu cau doi lich.
+- Admin co nut 'Dong bo lich da duyet' khi yeu cau approved nhung bookings chua khop ngay/gio de nghi. Backend van kiem tra lich trung, cong suat va khung gio.
+
+CHAY LOCAL
+1. Giai nen ZIP -> PETDAY_OFFICIAL.
+2. Sao chep server/.env an toan tu ban cu; KHONG dua file .env len Git.
+3. Dung frontend va backend cu bang Ctrl+C.
+4. Terminal 1: cd PETDAY_OFFICIAL/server ; npm install ; npm start
+5. Terminal 2: cd PETDAY_OFFICIAL ; npm install ; npm run dev
+6. Mo dia chi Vite in ra; refresh Ctrl+F5.
+
+SUA LICH DA DUYET NHUNG HIEN 04/12/2026 THAY VI 05/12/2026
+1. Dang nhap Admin -> Lich hen -> Duyet yeu cau doi lich.
+2. Tim yeu cau co ngay de nghi 2026-12-05, trang thai Da duyet.
+3. Neu 'Lich hen hien tai' la 2026-12-04, bam 'Dong bo lich da duyet'.
+4. Xac nhan thong bao da dong bo ngay gio; dang nhap Customer va Ctrl+F5.
+5. Neu khong duoc duyet do khung gio het cho, qua sat gio hoac co trung lich: khong ep SQL, can xem lai dieu kien va phoi hop thu cong.
+
+DA KIEM TRA
+- node --check server/src/server.js: PASS.
+- Static checks for UTC date bug: PASS.
+- ZIP archive integrity: PASS (khi dong goi).
+- Chua thuc hien build frontend va e2e PostgreSQL tren may cua nguoi dung.

@@ -3,7 +3,7 @@ import {getOperationsPriorities,prioritySummary} from './opsPriorityRules.mjs';
 type Booking={code:string;date:string;slot:string;status:string;paymentStatus:string;assignedStaff?:string;assignedStaffId?:number;petName?:string;ownerName?:string;branch?:string;service?:string};
 type Props={bookings:Booking[];onOpenBooking:(code:string)=>void;onOpenFinance:()=>void};
 const todayLocal=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
-const groups=[{id:'all',label:'Tất cả'},{id:'overdue',label:'Quá hạn'},{id:'pending',label:'Chờ xác nhận'},{id:'staff',label:'Chưa phân công'},{id:'finance',label:'Chưa thu tiền'}] as const;
+const groups=[{id:'all',label:'Tất cả'},{id:'overdue',label:'Quá hạn'},{id:'pending',label:'Chờ xác nhận'},{id:'finance',label:'Chưa thu tiền'}] as const;
 export default function OperationsPriorities({bookings,onOpenBooking,onOpenFinance}:Props){
  const [filter,setFilter]=useState<string>('all');
  const [expanded,setExpanded]=useState(false);

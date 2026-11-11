@@ -7,8 +7,9 @@ export function staffAssignmentIssue({bookingStatus,staffActive,bookingBranch,st
  if(isBusy)return 'Nhân viên đã có lịch trong cùng khung giờ.';
  return null;
 }
-export function careStepIssue(eventType,{status,hasCheckIn,hasCareUpdate,hasReady,hasCheckOut}){
- if(eventType==='check_in')return (['Đã xác nhận','Đang thực hiện'].includes(status)&&!hasCheckIn)?null:'Chỉ check-in một lần sau xác nhận.';
+export function careStepIssue(eventType,{status,hasPetArrived=false,hasCheckIn,hasCareUpdate,hasReady,hasCheckOut}){
+ if(eventType==='pet_arrived')return (status==='Đã xác nhận'&&!hasPetArrived&&!hasCheckIn)?null:'Chỉ tiếp nhận pet một lần, sau khi lịch được xác nhận.';
+ if(eventType==='check_in')return (['Đã xác nhận','Đang thực hiện'].includes(status)&&hasPetArrived&&!hasCheckIn)?null:'Cần xác nhận thú cưng đã đến trước khi bắt đầu.';
  if(eventType==='care_update')return (status==='Đang thực hiện'&&hasCheckIn&&!hasCheckOut)?null:'Chỉ cập nhật chăm sóc trước bàn giao.';
  if(eventType==='ready')return (status==='Đang thực hiện'&&hasCheckIn&&hasCareUpdate&&!hasReady)?null:'Cần cập nhật chăm sóc trước khi sẵn sàng bàn giao.';
  if(eventType==='check_out')return (status==='Đang thực hiện'&&hasCheckIn&&!hasCheckOut)?null:'Chỉ hoàn tất sau khi đã bắt đầu dịch vụ và chưa bàn giao.';

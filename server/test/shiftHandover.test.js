@@ -6,7 +6,7 @@ const items=(b)=>handoverItems(b,'2026-11-04');
 test('invalid reporting date yields empty result',()=>assert.deepEqual(handoverItems([base],'invalid'),[]));
 test('overdue active booking must be investigated',()=>assert.equal(items([{...base,date:'2026-11-03'}])[0].kind,'overdue'));
 test('pending today requests approval',()=>assert.equal(items([{...base,status:'Đang chờ xác nhận'}])[0].kind,'approval'));
-test('unassigned confirmed booking shows staffing issue',()=>assert.equal(items([{...base,assignedStaffId:null}])[0].kind,'staff'));
+test('unassigned confirmed booking has no staffing issue',()=>assert.deepEqual(items([{...base,assignedStaffId:null}]),[]));
 test('completed unpaid booking goes to manual reconciliation',()=>assert.equal(items([{...base,status:'Hoàn tất'}])[0].kind,'payment'));
 test('completed paid booking has no handover item',()=>assert.deepEqual(items([{...base,status:'Hoàn tất',paymentStatus:'Đã thanh toán'}]),[]));
 test('cancelled unpaid booking has no receivable',()=>assert.deepEqual(items([{...base,status:'Đã hủy'}]),[]));

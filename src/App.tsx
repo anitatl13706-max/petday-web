@@ -106,7 +106,10 @@ function Header({ page }: { page: Page }) {
   const [accountOpen,setAccountOpen] = useState(false);
   const [viewer,setViewer] = useState<{full_name:string;role:string}|null>(null);
   useEffect(()=>{const token=sessionStorage.getItem('petday_token_v3')||sessionStorage.getItem('petday_api_token');if(!token){setViewer(null);return;}apiFetch('/api/me',{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.ok?r.json():null).then(setViewer).catch(()=>setViewer(null));},[page]);
-  const go = (target: Page, section?:string) => { setOpen(false); if(section)sessionStorage.setItem('petday_focus_section',section); navigateTo(target); if(section)window.dispatchEvent(new Event('petday:focus')); };
+  const [activeSection,setActiveSection]=useState('');
+  const go = (target: Page, section?:string) => { setOpen(false);setActiveSection(''); if(section)sessionStorage.setItem('petday_focus_section',section); navigateTo(target); if(section)window.dispatchEvent(new Event('petday:focus')); };
+  const goSection=(id:'quy-trinh'|'ve-petday'|'cam-nang')=>{setOpen(false);setActiveSection(id);if(page!=='home')navigateTo('home');window.setTimeout(()=>{document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'});},page==='home'?0:120);};
+  useEffect(()=>{if(page!=='home')setActiveSection('');},[page]);
   return (
     <>
       <div className="hidden bg-[#142B55] py-2 text-white md:block">
@@ -122,12 +125,12 @@ function Header({ page }: { page: Page }) {
         <div className="container-pd flex h-[76px] items-center justify-between">
           <Logo />
           <nav className="hidden items-center gap-8 lg:flex">
-            <button className={`nav-link ${page === 'home' ? 'active' : ''}`} onClick={() => go('home')}>Trang chủ</button>
+            <button className={`nav-link ${page === 'home' && !activeSection ? 'active' : ''}`} onClick={() => go('home')}>Trang chủ</button>
             <button className={`nav-link ${page === 'services' ? 'active' : ''}`} onClick={() => go('services')}>Dịch vụ</button>
             <button className={`nav-link ${page === 'shop' ? 'active' : ''}`} onClick={() => go('shop')}>Cửa hàng</button>
-            <a className="nav-link" href="#quy-trinh">Quy trình</a>
-            <a className="nav-link" href="#ve-petday">Về PetDay</a>
-            <a className="nav-link" href="#cam-nang">Cẩm nang</a>
+            <button type="button" className={`nav-link ${page==='home'&&activeSection==='quy-trinh'?'active':''}`} onClick={()=>goSection('quy-trinh')}>Quy trình</button>
+            <button type="button" className={`nav-link ${page==='home'&&activeSection==='ve-petday'?'active':''}`} onClick={()=>goSection('ve-petday')}>Về PetDay</button>
+            <button type="button" className={`nav-link ${page==='home'&&activeSection==='cam-nang'?'active':''}`} onClick={()=>goSection('cam-nang')}>Cẩm nang</button>
           </nav>
           <div className="hidden items-center gap-3 md:flex">
             <div className="relative">
@@ -156,8 +159,9 @@ function Header({ page }: { page: Page }) {
               <button className="mobile-link" onClick={() => go('shop')}>Cửa hàng thú cưng</button>
               {viewer?.role==='customer'&&<button className="mobile-link" onClick={() => go('appointments')}>Lịch hẹn của tôi</button>}
               <button className="mobile-link" onClick={() => go(viewer?.role==='admin'||viewer?.role==='staff'?'admin':'account')}>{viewer?.role==='admin'?'Quản trị':viewer?.role==='staff'?'Lịch làm việc':'Tài khoản của tôi'}</button>
-              <a className="mobile-link" href="#quy-trinh" onClick={() => setOpen(false)}>Quy trình</a>
-              <a className="mobile-link" href="#ve-petday" onClick={() => setOpen(false)}>Về PetDay</a>
+              <button className="mobile-link" onClick={()=>goSection('quy-trinh')}>Quy trình</button>
+              <button className="mobile-link" onClick={()=>goSection('ve-petday')}>Về PetDay</button>
+              <button className="mobile-link" onClick={()=>goSection('cam-nang')}>Cẩm nang</button>
               <button className="btn-coral mt-4 justify-center" onClick={() => go(viewer?.role==='admin'||viewer?.role==='staff'?'admin':'booking')}>{viewer?.role==='admin'?'Quản trị':'Đặt lịch ngay'}</button>
             </nav>
           </div>
@@ -193,7 +197,7 @@ function ServiceCard({ service, compact = false }: { service: Service; compact?:
       <div className="p-5 md:p-6">
         <div className="mb-3 flex items-center gap-3 text-xs font-semibold text-[#738097]"><span className="flex items-center gap-1.5"><Icon name="clock" size={15} /> {service.duration}</span></div>
         <h3 className="text-xl font-bold tracking-[-0.02em] text-[#142B55]">{service.name}</h3>
-        <p className="mt-2 min-h-12 text-sm leading-6 text-[#68758B]">{service.description}</p><p className="mt-2 text-xs font-semibold text-[#526179]">{service.category==='Daycare'?'Dành cho chó · nhận buổi sáng':service.name==='Grooming tạo kiểu'?'Dành cho chó':'Dành cho chó và mèo'} · Giá được xác nhận khi đặt</p>
+        <p className="mt-2 min-h-12 text-sm leading-6 text-[#68758B]">{service.description}</p><p className="mt-2 text-xs font-semibold text-[#526179]">{service.category==='Daycare'?'Dành cho chó và mèo · nhận buổi sáng':'Dành cho chó và mèo'} · Giá được xác nhận khi đặt</p>
         <div className="mt-5 flex items-end justify-between border-t border-[#142B55]/8 pt-4">
           <div><span className="block text-[11px] font-semibold uppercase tracking-wider text-[#8A95A8]">Giá dịch vụ</span><strong className="mt-1 block text-lg text-[#142B55]">{service.price}</strong></div>
           <button className="grid h-11 w-11 place-items-center rounded-full bg-[#DCEEFF] text-[#142B55] transition group-hover:bg-[#FF765E] group-hover:text-white" aria-label={`Đặt ${service.name}`} onClick={() => { sessionStorage.setItem('petday_service_prefill', service.name); navigateTo('booking'); }}><Icon name="arrow" /></button>

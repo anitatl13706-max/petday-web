@@ -1388,3 +1388,10 @@
 @media (prefers-reduced-motion: reduce) {
   .petday-admin-disclosure, .petday-admin-disclosure > summary span { transition: none; }
 }
+
+/* Navigation jumps compensate for the sticky PetDay header. */
+#quy-trinh, #ve-petday, #cam-nang { scroll-margin-top: 96px; }
+
+/* Booking controls: clear focus & readable numeric times. */
+.petday-slot-option { font-variant-numeric:tabular-nums; }
+.petday-slot-option:focus-visible,.nav-link:focus-visible { outline:2px solid #ff765e;outline-offset:3px; }

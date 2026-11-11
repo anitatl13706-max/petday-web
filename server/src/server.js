@@ -1,3 +1,9 @@
+import {closeUnusedTaxiLegs} from './taxiCloseout.mjs';
+import {bootstrapTaxiLegs} from './taxiLegBootstrap.mjs';
+import {taxiRefundCreateIssue,taxiRefundTransitionIssue,refundableTaxiAmount} from './taxiRefundRules.mjs';
+import {settle} from './settlementMath.mjs';
+import {taxiCustomerCancellationRefund} from './taxiIncidentRules.mjs';
+import {serviceRefundBase} from './refundSplit.mjs';
 import {serviceNotProvided,retailNotReceived,fullRefundDecisionIssue} from './fullRefundPolicy.mjs';
 import {getAiReply,providerConfig} from './petdayAi.mjs';
 import {randomUUID,randomBytes,createHash} from 'node:crypto';
@@ -12,15 +18,23 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
 import { z } from 'zod';
+import { reportWindowOpen, qrPayload } from './paymentQrRules.mjs';
+import { normalizePetDayPhone } from './phone.mjs';
 import { calculate, calculateExtras, addOns, services, slots, transitions, validSlot, validFutureDate, buildDailySlotPreview, servicesOverlap } from './rules.js';
 import { taxiQuote, taxiTariffs } from './taxiRules.js';
+import { taxiLegTransitionIssue } from './taxiIncidentRules.mjs';
 import {retailTransitionIssue,retailTransferNoticeIssue} from './retailWorkflowRules.js';
 import { missingServiceNames } from './schemaRules.js';
 import { staffAssignmentIssue, careStepIssue, noShowIssue } from './staffRules.js';
+import {canCloseWithCustomerHandoff, canDepartReturnTaxi} from './handoffRules.js';
 import { tomorrowInVietnam, automaticRemindersEnabled } from './reminders.js';
 import { refundEligibility, refundDecisionIssue, refundAmountIssue } from './refundRules.js';
 import { intakeEditIssue,validEmergencyPhone } from './intakeRules.js';
 import { cancellationRequestIssue,cancellationDecisionIssue } from './cancellationRules.js';
+import { cancellationPolicy } from './cancellationPolicy.mjs';
+import { adminCancellationTerms } from './adminCancellationRules.mjs';
+import { sameAppointmentTime } from './rescheduleTime.mjs';
+import {rescheduleDecisionIssue} from './rescheduleGuard.mjs';
 
 const { Pool }=pg;
 const app=express();
@@ -53,6 +67,7 @@ async function careOperator(req,res,next){
 }
 
 const emailSchema=z.string().trim().email().max(200).transform(x=>x.toLowerCase());
+
 const petSchema=z.object({name:z.string().trim().min(1).max(80),species:z.enum(['Chó','Mèo']),breed:z.string().trim().max(100).default(''),gender:z.enum(['Đực','Cái','Chưa xác định']).default('Chưa xác định'),age:z.coerce.number().min(0).max(40),weight:z.coerce.number().gt(0).max(80),notes:z.string().max(1000).default(''),photoUrl:z.union([z.literal(''),z.string().max(2000).refine(x=>(x.startsWith('https://')&&URL.canParse(x))||/^\/uploads\/[a-f0-9-]+\.(jpg|png|webp)$/.test(x),'Chỉ chấp nhận ảnh HTTPS hoặc ảnh tải lên')]).default('')});
 
 // Public PetDay AI. Never accepts account IDs or executes business mutations.
@@ -163,12 +178,12 @@ app.get('/api/health/services',handler(async(req,res)=>{
  res.status(missing.length?503:200).json({ok:missing.length===0,serviceCount:Object.keys(services).length,missingServiceNames:missing,help:missing.length?'Sao lưu PostgreSQL và đối chiếu SQL 022_v638_service_packages.sql; không chạy lại SQL nền tảng.':'Cả 8 tên gói đã có trong ràng buộc bookings_service_check. Kiểm thử API đặt lịch và giá sau bước này.'});
 }));
 app.get('/api/health/schema',handler(async(req,res)=>{
- const expected={password_reset_tokens:['id','user_id','token_hash','expires_at','used_at'],users:['id','email','full_name','password_hash','role'],pets:['id','owner_id','name','species','breed','age','weight','notes','photo_url'],bookings:['id','code','customer_id','pet_id','service','branch','booking_date','slot','status','payment_status','payment_method','promo_code','line_items','total','created_at'],care_records:['booking_id','notes','care_date'],reviews:['booking_id','rating','comment','moderation_status'],consultation_requests:['id','customer_id','reply_text'],booking_reschedule_requests:['id','status'],promotions:['code','active'],payment_events:['booking_id','admin_id','new_status'],account_notifications:['user_id','title','body','read_at'],business_payment_settings:['id','bank_name','account_number','account_holder'],blocked_slots:['id','branch','booking_date','slot','reason'],staff_members:['id','full_name','branch','active','user_id'],staff_shifts:['id','staff_id','shift_date','slot'],booking_assignments:['booking_id','staff_id','booking_date','slot'],staff_assignment_events:['booking_id','staff_id','action','changed_by'],booking_no_shows:['booking_id','recorded_by','reason','recorded_at'],booking_reminders:['booking_id','kind','sent_by'],refund_requests:['id','booking_id','customer_id','status','amount','reason'],refund_events:['id','refund_id','actor_id','new_status'],service_events:['id','booking_id','event_type','note','created_by','created_at','photo_url'],pet_taxi_requests:['id','booking_id','zone','pickup_address','contact_phone','fee','status'],booking_intake_forms:['booking_id','emergency_phone','health_alerts','care_instructions','owner_confirmed','updated_at'],booking_cancellation_requests:['id','booking_id','customer_id','reason','status','admin_note','resolved_at']};
+ const expected={password_reset_tokens:['id','user_id','token_hash','expires_at','used_at'],users:['id','email','full_name','password_hash','role','default_address','contact_phone','default_delivery_zone'],pets:['id','owner_id','name','species','breed','age','weight','notes','photo_url'],bookings:['id','code','customer_id','pet_id','service','branch','booking_date','slot','status','payment_status','payment_method','promo_code','line_items','total','created_at'],care_records:['booking_id','notes','care_date'],reviews:['booking_id','rating','comment','moderation_status'],consultation_requests:['id','customer_id','reply_text'],booking_reschedule_requests:['id','status'],promotions:['code','active'],payment_events:['booking_id','admin_id','new_status'],account_notifications:['user_id','title','body','read_at'],business_payment_settings:['id','bank_name','account_number','account_holder'],blocked_slots:['id','branch','booking_date','slot','reason'],staff_members:['id','full_name','branch','active','user_id'],staff_shifts:['id','staff_id','shift_date','slot'],booking_assignments:['booking_id','staff_id','booking_date','slot'],staff_assignment_events:['booking_id','staff_id','action','changed_by'],booking_no_shows:['booking_id','recorded_by','reason','recorded_at'],booking_reminders:['booking_id','kind','sent_by'],refund_requests:['id','booking_id','customer_id','status','amount','reason','refund_reference'],refund_events:['id','refund_id','actor_id','new_status'],service_events:['id','booking_id','event_type','note','created_by','created_at','photo_url'],pet_taxi_requests:['id','booking_id','zone','pickup_address','contact_phone','fee','status','direction','return_address','return_completed_at'],booking_intake_forms:['booking_id','emergency_phone','health_alerts','care_instructions','owner_confirmed','updated_at'],booking_cancellation_requests:['id','booking_id','customer_id','reason','status','admin_note','resolved_at'],payment_qr_sessions:['kind','code','customer_id','issued_at','expires_at','reported_at'],pet_taxi_legs:['id','booking_id','leg','fee','state','refund_due'],pet_taxi_leg_events:['taxi_leg_id','actor_id','action'],taxi_refund_requests:['id','taxi_leg_id','booking_id','amount','status','refund_reference'],taxi_refund_events:['refund_id','actor_id','new_status'],booking_payment_receipts:['id','booking_id','amount','method','reference','recorded_by']};
  const names=Object.keys(expected);
  const q=await pool.query('SELECT table_name,column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[])',['public',names]);
  const present=new Map();for(const row of q.rows){if(!present.has(row.table_name))present.set(row.table_name,new Set());present.get(row.table_name).add(row.column_name);}
  const missing=Object.entries(expected).flatMap(([table,cols])=>cols.filter(c=>!present.get(table)?.has(c)).map(column=>({table,column})));
- const migrationHints={reviews:'021_v637_review_moderation.sql',password_reset_tokens:'009_v612_safe_upgrade.sql',pets:'003_support_pets.sql / 009_v612_safe_upgrade.sql',bookings:'009_v612_safe_upgrade.sql',consultation_requests:'009_v612_safe_upgrade.sql',booking_reschedule_requests:'009_v612_safe_upgrade.sql',promotions:'009_v612_safe_upgrade.sql',payment_events:'009_v612_safe_upgrade.sql',account_notifications:'009_v612_safe_upgrade.sql',business_payment_settings:'010_v613_payment_settings.sql',service_events:'011_v614_service_timeline.sql / 015_v618_reminders_reports.sql',blocked_slots:'012_v615_capacity_management.sql',staff_members:'013_v616_staff_dispatch.sql / 017_v620_staff_accounts.sql',staff_shifts:'013_v616_staff_dispatch.sql',booking_assignments:'013_v616_staff_dispatch.sql',staff_assignment_events:'013_v616_staff_dispatch.sql',booking_no_shows:'014_v617_no_show.sql',booking_reminders:'015_v618_reminders_reports.sql',refund_requests:'016_v619_refund_reconciliation.sql',refund_events:'016_v619_refund_reconciliation.sql',pet_taxi_requests:'018_v622_pet_taxi.sql',booking_intake_forms:'019_v625_pre_arrival.sql',booking_cancellation_requests:'020_v628_cancellation_review.sql'};
+ const migrationHints={users:'047_v697_default_customer_address.sql / 048_v698_phone_daycare.sql',payment_qr_sessions:'049_v699_payment_qr_sessions.sql',reviews:'021_v637_review_moderation.sql',password_reset_tokens:'009_v612_safe_upgrade.sql',pets:'003_support_pets.sql / 009_v612_safe_upgrade.sql',bookings:'009_v612_safe_upgrade.sql',consultation_requests:'009_v612_safe_upgrade.sql',booking_reschedule_requests:'009_v612_safe_upgrade.sql',promotions:'009_v612_safe_upgrade.sql',payment_events:'009_v612_safe_upgrade.sql',account_notifications:'009_v612_safe_upgrade.sql',business_payment_settings:'010_v613_payment_settings.sql',service_events:'011_v614_service_timeline.sql / 015_v618_reminders_reports.sql',blocked_slots:'012_v615_capacity_management.sql',staff_members:'013_v616_staff_dispatch.sql / 017_v620_staff_accounts.sql',staff_shifts:'013_v616_staff_dispatch.sql',booking_assignments:'013_v616_staff_dispatch.sql',staff_assignment_events:'013_v616_staff_dispatch.sql',booking_no_shows:'014_v617_no_show.sql',booking_reminders:'015_v618_reminders_reports.sql',refund_requests:'016_v619_refund_reconciliation.sql',refund_events:'016_v619_refund_reconciliation.sql',pet_taxi_requests:'018_v622_pet_taxi.sql / 050_v6101_taxi_two_way.sql',pet_taxi_legs:'051_v61037_taxi_leg_incidents.sql',pet_taxi_leg_events:'051_v61037_taxi_leg_incidents.sql',taxi_refund_requests:'053_v61041_taxi_refund_ledger.sql',taxi_refund_events:'053_v61041_taxi_refund_ledger.sql',booking_payment_receipts:'054_v61045_booking_receipts.sql',booking_intake_forms:'019_v625_pre_arrival.sql',booking_cancellation_requests:'020_v628_cancellation_review.sql'};
  const suggestedMigrations=[...new Set(missing.map(x=>migrationHints[x.table]).filter(Boolean).flatMap(x=>x.split(' / ')))];
  res.status(missing.length?503:200).json({ok:missing.length===0,mode:'postgresql',schemaReady:missing.length===0,missing,suggestedMigrations,help:missing.length?'Sao lưu database, kiểm tra trạng thái các migration, chạy các file còn thiếu theo thứ tự; tuyệt đối không chạy lại file gây xung đột.':'Schema đã có các cột quan trọng.'});
 }));
@@ -204,8 +219,8 @@ app.patch('/api/admin/promotions/:id',auth,admin,handler(async(req,res)=>{
 }));
 async function notify(c,userId,title,body,bookingCode=null){await c.query('INSERT INTO account_notifications(user_id,title,body,booking_code) VALUES($1,$2,$3,$4)',[userId,title,body,bookingCode]);}
 
-app.post('/api/auth/register',handler(async(req,res)=>{const input=z.object({email:emailSchema,password:z.string().min(8).max(128),fullName:z.string().trim().min(2).max(120)}).parse(req.body);const hash=await bcrypt.hash(input.password,12);try{const r=await pool.query('INSERT INTO users(email,full_name,password_hash) VALUES($1,$2,$3) RETURNING id,email,full_name,role',[input.email,input.fullName,hash]);res.status(201).json({message:'Đã đăng ký',user:r.rows[0]});}catch(e){if(e.code==='23505')return fail(res,409,'Email đã được sử dụng.');throw e;}}));
-app.post('/api/auth/login',handler(async(req,res)=>{const input=z.object({email:emailSchema,password:z.string()}).parse(req.body);const r=await pool.query('SELECT * FROM users WHERE email=$1',[input.email]);const u=r.rows[0];if(!u||!await bcrypt.compare(input.password,u.password_hash))return fail(res,401,'Email hoặc mật khẩu không đúng.');const token=jwt.sign({id:u.id,role:u.role},secret,{expiresIn:'8h'});res.json({token,user:{id:u.id,email:u.email,fullName:u.full_name,role:u.role}});}));
+app.post('/api/auth/register',handler(async(req,res)=>{const input=z.object({email:emailSchema,password:z.string().min(8).max(128),fullName:z.string().trim().min(2).max(120),phone:z.string().min(9).max(24)}).parse(req.body);const phone=normalizePetDayPhone(input.phone);if(!phone)return fail(res,422,'Số điện thoại Việt Nam không hợp lệ.');const hash=await bcrypt.hash(input.password,12);try{const r=await pool.query('INSERT INTO users(email,full_name,password_hash,contact_phone) VALUES($1,$2,$3,$4) RETURNING id,email,full_name,role',[input.email,input.fullName,hash,phone]);res.status(201).json({message:'Đã đăng ký',user:r.rows[0]});}catch(e){if(e.code==='23505')return fail(res,409,'Email hoặc số điện thoại đã được sử dụng.');throw e;}}));
+app.post('/api/auth/login',handler(async(req,res)=>{const input=z.object({identifier:z.string().trim().min(5).max(200).optional(),email:z.string().trim().min(5).max(200).optional(),password:z.string()}).parse(req.body);const identifier=input.identifier||input.email||'';const phone=normalizePetDayPhone(identifier);const email=phone?null:emailSchema.safeParse(identifier);if(!phone&&!email?.success)return fail(res,422,'Nhập email hoặc số điện thoại hợp lệ.');const r=phone?await pool.query('SELECT * FROM users WHERE contact_phone=$1',[phone]):await pool.query('SELECT * FROM users WHERE email=$1',[email.data]);const u=r.rows[0];if(!u||!await bcrypt.compare(input.password,u.password_hash))return fail(res,401,'Thông tin đăng nhập hoặc mật khẩu không đúng.');const token=jwt.sign({id:u.id,role:u.role},secret,{expiresIn:'8h'});res.json({token,user:{id:u.id,email:u.email,fullName:u.full_name,role:u.role}});}));
 // Password recovery: always respond generically; never expose tokens to the browser.
 const resetLimiter=new Map();
 app.post('/api/auth/forgot-password',handler(async(req,res)=>{
@@ -234,11 +249,14 @@ app.post('/api/auth/reset-password',handler(async(req,res)=>{
   await c.query('UPDATE password_reset_tokens SET used_at=now() WHERE user_id=$1 AND used_at IS NULL',[r.rows[0].user_id]);await c.query('COMMIT');res.json({message:'Đã cập nhật mật khẩu. Vui lòng đăng nhập lại.'});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }));
-app.get('/api/me',auth,handler(async(req,res)=>{const r=await pool.query('SELECT id,email,full_name,role FROM users WHERE id=$1',[req.user.id]);if(!r.rows.length)return fail(res,401,'Phiên đăng nhập không hợp lệ.');res.json(r.rows[0]);}));
+app.get('/api/me',auth,handler(async(req,res)=>{const r=await pool.query('SELECT id,email,full_name,role,default_address AS "defaultAddress",contact_phone AS "contactPhone",default_delivery_zone AS "defaultDeliveryZone" FROM users WHERE id=$1',[req.user.id]);if(!r.rows.length)return fail(res,401,'Phiên đăng nhập không hợp lệ.');res.json(r.rows[0]);}));
 // Customer account: update only self, never accept a role in the request.
 app.patch('/api/me',auth,handler(async(req,res)=>{
- const d=z.object({fullName:z.string().trim().min(2).max(120)}).strict().parse(req.body);
- const r=await pool.query('UPDATE users SET full_name=$1 WHERE id=$2 RETURNING id,email,full_name,role',[d.fullName,req.user.id]);
+ const d=z.object({fullName:z.string().trim().min(2).max(120),defaultAddress:z.string().trim().max(250).optional(),contactPhone:z.string().trim().max(20).optional(),defaultDeliveryZone:z.enum(['inner_hcm','outer_hcm']).nullable().optional()}).strict().parse(req.body);
+ if(d.defaultAddress && d.defaultAddress.length<12)return fail(res,422,'Địa chỉ mặc định cần ít nhất 12 ký tự.');
+ if(d.contactPhone && !/^(0\d{9}|\+84\d{9})$/.test(d.contactPhone.replace(/[ .-]/g,'')))return fail(res,422,'Số điện thoại liên hệ không hợp lệ.');
+ if(d.contactPhone){const candidate=normalizePetDayPhone(d.contactPhone);if(!candidate)return fail(res,422,'Số điện thoại chưa hợp lệ.');const existing=await pool.query('SELECT id FROM users WHERE contact_phone=$1 AND id<>$2',[candidate,req.user.id]);if(existing.rowCount)return fail(res,409,'Số điện thoại đã được tài khoản khác sử dụng.');}
+ const r=await pool.query('UPDATE users SET full_name=$1,default_address=CASE WHEN $6::boolean THEN $2 ELSE default_address END,contact_phone=CASE WHEN $7::boolean THEN $3 ELSE contact_phone END,default_delivery_zone=CASE WHEN $8::boolean THEN $4 ELSE default_delivery_zone END WHERE id=$5 RETURNING id,email,full_name,role,default_address AS "defaultAddress",contact_phone AS "contactPhone",default_delivery_zone AS "defaultDeliveryZone"',[d.fullName,d.defaultAddress===undefined?null:(d.defaultAddress||null),d.contactPhone===undefined?null:(d.contactPhone?normalizePetDayPhone(d.contactPhone):null),d.defaultDeliveryZone??null,req.user.id,d.defaultAddress!==undefined,d.contactPhone!==undefined,d.defaultDeliveryZone!==undefined]);
  res.json(r.rows[0]);
 }));
 // V6.42: published price overrides are loaded from PostgreSQL before quoting or booking.
@@ -278,13 +296,40 @@ app.patch('/api/admin/services/:name/availability',auth,admin,handler(async(req,
 }));
 // Server-authoritative quote: show real calculation before submitting a booking.
 app.get('/api/quote',auth,handler(async(req,res)=>{
- const d=z.object({petId:z.coerce.number().int().positive(),service:z.string(),addOns:z.string().default(''),taxiZone:z.enum(['none','nearby','extended']).default('none'),retail:z.string().max(300).default('[]')}).parse(req.query);
+ const d=z.object({petId:z.coerce.number().int().positive(),service:z.string(),addOns:z.string().default(''),taxiZone:z.enum(['none','nearby','extended']).default('none'),taxiDirection:z.enum(['pickup','return','round_trip']).default('pickup'),retail:z.string().max(300).default('[]')}).parse(req.query);
  if(!services[d.service])return fail(res,400,'Dịch vụ không tồn tại.');
  if(services[d.service].active===false)return fail(res,409,'Gói dịch vụ đã tạm ngừng nhận lịch. Vui lòng chọn gói khác.');
  const r=await pool.query('SELECT species,weight,age FROM pets WHERE id=$1 AND owner_id=$2 AND archived_at IS NULL',[d.petId,req.user.id]);
  if(!r.rowCount)return fail(res,404,'Không tìm thấy thú cưng thuộc tài khoản.');
- try{const quote=calculate(d.service,r.rows[0]);const extra=calculateExtras(d.service,d.addOns?d.addOns.split(','):[]);quote.lines.push(...extra.lines);quote.total+=extra.total;if(d.taxiZone!=='none'){const fare=taxiTariffs[d.taxiZone];quote.total+=fare.fee;quote.lines.push({type:'taxi',label:'Pet Taxi · '+fare.label,amount:fare.fee});}const retail=await quoteRetail(pool,retailSelectionSchema.parse(JSON.parse(d.retail)));quote.total+=retail.total;quote.lines.push(...retail.lines);res.json({...quote,service:d.service,currency:'VND',notice:'Báo giá theo hồ sơ hiện tại; kiểm tra lại khi đặt lịch.'});}
+ try{const quote=calculate(d.service,r.rows[0]);const extra=calculateExtras(d.service,d.addOns?d.addOns.split(','):[]);quote.lines.push(...extra.lines);quote.total+=extra.total;if(d.taxiZone!=='none'){const fare=taxiTariffs[d.taxiZone];const taxiCharge=fare.fee*(d.taxiDirection==='round_trip'?2:1);quote.total+=taxiCharge;quote.lines.push({type:'taxi',label:'Pet Taxi · '+(d.taxiDirection==='round_trip'?'Hai chiều':d.taxiDirection==='return'?'Chiều về':'Chiều đón')+' · '+fare.label,amount:taxiCharge});}const retail=await quoteRetail(pool,retailSelectionSchema.parse(JSON.parse(d.retail)));quote.total+=retail.total;quote.lines.push(...retail.lines);res.json({...quote,service:d.service,currency:'VND',notice:'Báo giá theo hồ sơ hiện tại; kiểm tra lại khi đặt lịch.'});}
  catch{return fail(res,422,'Thú cưng không đủ điều kiện cho dịch vụ.');}
+}));
+// V6.99: issue a 15-minute NON-BANK demo QR, checked by the server.
+// Customer reports payment; only Admin can set payment_status paid.
+app.post('/api/payments/qr-session',auth,handler(async(req,res)=>{
+ const d=z.object({kind:z.enum(['booking','retail']),code:z.string().regex(/^P[DS]-[A-Z0-9-]{5,45}$/)}).strict().parse(req.body);
+ const c=await pool.connect();try{await c.query('BEGIN');
+  const table=d.kind==='booking'?'bookings':'retail_orders';
+  const q=await c.query(`SELECT code,total,payment_method,payment_status,status FROM ${table} WHERE code=$1 AND customer_id=$2`,[d.code,req.user.id]);
+  if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy giao dịch của bạn.');}
+  const order=q.rows[0];
+  const unpaid=d.kind==='booking'?order.payment_status==='Chưa thanh toán':order.payment_status!=='paid';
+  if(order.payment_method!=='bank_transfer'||!unpaid||['Đã hủy','cancelled'].includes(order.status)){
+    await c.query('ROLLBACK');return fail(res,409,'Giao dịch không còn đủ điều kiện tạo mã QR.');
+  }
+  const old=await c.query('SELECT * FROM payment_qr_sessions WHERE kind=$1 AND code=$2 FOR UPDATE',[d.kind,d.code]);
+  let row=old.rows[0];
+  if(!row||(!row.reported_at&&new Date(row.expires_at).getTime()<=Date.now())){
+   const out=await c.query(`INSERT INTO payment_qr_sessions(kind,code,customer_id,issued_at,expires_at) VALUES($1,$2,$3,now(),now()+interval '15 minutes')
+     ON CONFLICT(kind,code) DO UPDATE SET issued_at=now(),expires_at=now()+interval '15 minutes',reported_at=NULL
+     RETURNING *`,[d.kind,d.code,req.user.id]);row=out.rows[0];
+  }
+  await c.query('COMMIT');
+  // QR encodes only a demo reference, never a bank account or an actual payment instruction.
+  const QRCode=(await import('qrcode')).default;
+  const svg=await QRCode.toString(qrPayload(d.kind,d.code,order.total),{type:'svg',errorCorrectionLevel:'M',margin:2,width:260});
+  res.json({kind:d.kind,code:d.code,expiresAt:row.expires_at,reportedAt:row.reported_at||null,qrSvgDataUrl:'data:image/svg+xml;base64,'+Buffer.from(svg).toString('base64'),demo:true,notice:'QR mô phỏng để tham chiếu đơn. Không dùng để chuyển tiền ngân hàng.'});
+ }catch(e){await c.query('ROLLBACK').catch(()=>{});throw e;}finally{c.release();}
 }));
 // V6.40: Customer-submitted transfer notice is NOT evidence of settlement.
 // Database enforces one notice per booking, and every read is scoped by role.
@@ -299,6 +344,9 @@ app.post('/api/bookings/:code/transfer-notice',auth,handler(async(req,res)=>{
   const b=q.rows[0];if(b.payment_method!=='bank_transfer'||b.payment_status!=='Chưa thanh toán'||b.status==='Đã hủy'){
    await c.query('ROLLBACK');return fail(res,409,'Chỉ có thể báo đã chuyển cho lịch chuyển khoản chưa được xác nhận và chưa hủy.');
   }
+  const windowCheck=await c.query('SELECT * FROM payment_qr_sessions WHERE kind=$1 AND code=$2 AND customer_id=$3 FOR UPDATE',['booking',b.code,req.user.id]);
+  if(!reportWindowOpen(windowCheck.rows[0])){await c.query('ROLLBACK');return fail(res,409,'Phiên QR đã hết 15 phút hoặc thông báo đã được gửi. Hãy tạo phiên mới hoặc liên hệ nhân viên.');}
+  await c.query('UPDATE payment_qr_sessions SET reported_at=now() WHERE kind=$1 AND code=$2',['booking',b.code]);
   await c.query(`INSERT INTO bank_transfer_notices(booking_id,customer_reference,customer_note,sender_bank,sender_name)
     VALUES($1,$2,$3,$4,$5) ON CONFLICT(booking_id) DO UPDATE SET customer_reference=EXCLUDED.customer_reference,customer_note=EXCLUDED.customer_note,sender_bank=EXCLUDED.sender_bank,sender_name=EXCLUDED.sender_name,updated_at=now()`,[b.id,d.customerReference||null,d.customerNote||null,d.senderBank,d.senderName]);
   await c.query('COMMIT');res.json({ok:true,message:'Đã ghi nhận thông báo của bạn. Trạng thái vẫn là Chưa thanh toán cho đến khi PetDay kiểm tra tiền thực nhận.'});
@@ -306,7 +354,7 @@ app.post('/api/bookings/:code/transfer-notice',auth,handler(async(req,res)=>{
 }));
 app.get('/api/admin/transfer-notices',auth,admin,handler(async(req,res)=>{
  const q=await pool.query(`SELECT b.code,b.total,b.payment_status AS "paymentStatus",b.status AS "bookingStatus",u.full_name AS "customerName",n.customer_reference AS "customerReference",n.customer_note AS "customerNote",n.sender_bank AS "senderBank",n.sender_name AS "senderName",n.created_at AS "createdAt",n.updated_at AS "updatedAt"
- FROM bank_transfer_notices n JOIN bookings b ON b.id=n.booking_id JOIN users u ON u.id=b.customer_id ORDER BY (b.payment_status='Chưa thanh toán') DESC,n.updated_at DESC LIMIT 150`);res.json(q.rows);
+ FROM bank_transfer_notices n JOIN bookings b ON b.id=n.booking_id JOIN users u ON u.id=b.customer_id JOIN payment_qr_sessions qr ON qr.kind='booking' AND qr.code=b.code AND qr.customer_id=b.customer_id AND qr.reported_at IS NOT NULL ORDER BY (b.payment_status='Chưa thanh toán') DESC,n.updated_at DESC LIMIT 150`);res.json(q.rows);
 }));
 // Staff must still inspect the bank statement and record its REAL reference via existing /api/admin/bookings/:code/payment.
 // Bank details are visible only when supplied by owner in server configuration.
@@ -338,6 +386,8 @@ app.patch('/api/bookings/:code/payment-method',auth,handler(async(req,res)=>{
   const found=await c.query('SELECT id,payment_method,payment_status,status FROM bookings WHERE code=$1 AND customer_id=$2 FOR UPDATE',[req.params.code,req.user.id]);
   if(!found.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch của bạn.');}
   const b=found.rows[0];if(b.payment_status!=='Chưa thanh toán'||b.status==='Đã hủy'||b.status==='Hoàn tất') {await c.query('ROLLBACK');return fail(res,409,'Lịch đã thanh toán, hủy hoặc hoàn tất nên không thể đổi phương thức.');}
+  const receipts=await c.query('SELECT 1 FROM booking_payment_receipts WHERE booking_id=$1 LIMIT 1',[b.id]);
+  if(receipts.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã ghi nhận thu một phần hoặc toàn bộ; không được đổi phương thức thanh toán.');}
   await c.query('UPDATE bookings SET payment_method=$1 WHERE id=$2',[paymentMethod,b.id]);
   await notify(c,req.user.id,'Đã thay đổi phương thức thanh toán '+req.params.code,paymentMethod==='cash'?'Thanh toán tại cơ sở khi sử dụng dịch vụ.':'Chuyển khoản theo mã lịch, chờ nhân viên đối soát.',req.params.code);
   await c.query('COMMIT');res.json({ok:true,paymentMethod});
@@ -354,11 +404,11 @@ app.post('/api/me/change-password',auth,handler(async(req,res)=>{
 }));
 // Promotions: backend validation never trusts displayed discounts.
 app.get('/api/promotions/verify',auth,handler(async(req,res)=>{
- const d=z.object({code:z.string().trim().min(1).max(32),petId:z.coerce.number().int().positive(),service:z.string(),addOns:z.string().default(''),taxiZone:z.enum(['none','nearby','extended']).default('none'),retail:z.string().max(300).default('[]')}).parse(req.query);
+ const d=z.object({code:z.string().trim().min(1).max(32),petId:z.coerce.number().int().positive(),service:z.string(),addOns:z.string().default(''),taxiZone:z.enum(['none','nearby','extended']).default('none'),taxiDirection:z.enum(['pickup','return','round_trip']).default('pickup'),retail:z.string().max(300).default('[]')}).parse(req.query);
  if(!services[d.service])return fail(res,422,'Dịch vụ không hợp lệ.');
  if(services[d.service].active===false)return fail(res,409,'Gói dịch vụ đã tạm ngừng nhận lịch.');
  const p=await pool.query('SELECT species,weight,age FROM pets WHERE id=$1 AND owner_id=$2 AND archived_at IS NULL',[d.petId,req.user.id]);if(!p.rowCount)return fail(res,404,'Không tìm thấy thú cưng.');
- const quote=calculate(d.service,p.rows[0]);const extra=calculateExtras(d.service,d.addOns?d.addOns.split(','):[]);quote.total+=extra.total;quote.lines.push(...extra.lines);if(d.taxiZone!=='none'){const fare=taxiTariffs[d.taxiZone];quote.total+=fare.fee;quote.lines.push({type:'taxi',label:'Pet Taxi · '+fare.label,amount:fare.fee});}const retail=await quoteRetail(pool,retailSelectionSchema.parse(JSON.parse(d.retail)));quote.total+=retail.total;quote.lines.push(...retail.lines);const code=d.code.toUpperCase();
+ const quote=calculate(d.service,p.rows[0]);const extra=calculateExtras(d.service,d.addOns?d.addOns.split(','):[]);quote.total+=extra.total;quote.lines.push(...extra.lines);if(d.taxiZone!=='none'){const fare=taxiTariffs[d.taxiZone];const taxiCharge=fare.fee*(d.taxiDirection==='round_trip'?2:1);quote.total+=taxiCharge;quote.lines.push({type:'taxi',label:'Pet Taxi · '+(d.taxiDirection==='round_trip'?'Hai chiều':d.taxiDirection==='return'?'Chiều về':'Chiều đón')+' · '+fare.label,amount:taxiCharge});}const retail=await quoteRetail(pool,retailSelectionSchema.parse(JSON.parse(d.retail)));quote.total+=retail.total;quote.lines.push(...retail.lines);const code=d.code.toUpperCase();
  const r=await pool.query('SELECT * FROM promotions WHERE code=$1 AND active=true AND starts_at<=now() AND ends_at>now()',[code]);if(!r.rowCount)return fail(res,422,'Mã không tồn tại hoặc đã hết hạn.');const o=r.rows[0];
  if(quote.total<Number(o.min_order)||o.service_name&&o.service_name!==d.service)return fail(res,422,'Mã không áp dụng cho dịch vụ hoặc số tiền hiện tại.');
  const count=await pool.query("SELECT count(*)::int AS all_count,count(*) FILTER (WHERE customer_id=$2)::int AS personal_count FROM bookings WHERE promo_code=$1 AND status <> 'Đã hủy'",[code,req.user.id]);
@@ -508,7 +558,7 @@ app.get('/api/availability/day',auth,handler(async(req,res)=>{
  if(!['PetDay Thảo Điền','PetDay Phú Mỹ Hưng'].includes(branch)||!services[service]||services[service].active===false||!validFutureDate(date))
   return fail(res,400,'Ngày, chi nhánh hoặc dịch vụ không hợp lệ.');
  const [reserved,closures]=await Promise.all([
-  pool.query("SELECT slot,COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int AS used FROM bookings WHERE branch=$1 AND booking_date=$2 AND status <> 'Đã hủy' GROUP BY slot",[branch,date]),
+  pool.query("SELECT slot,COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa dịu nhẹ','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int AS used FROM bookings WHERE branch=$1 AND booking_date=$2 AND status <> 'Đã hủy' GROUP BY slot",[branch,date]),
   pool.query('SELECT slot,reason FROM blocked_slots WHERE branch=$1 AND booking_date=$2',[branch,date])
  ]);
  const used=Object.fromEntries(reserved.rows.map(row=>[row.slot,Number(row.used)]));
@@ -516,11 +566,11 @@ app.get('/api/availability/day',auth,handler(async(req,res)=>{
  const result=buildDailySlotPreview({service,branch,used,blocked});
  res.json({branch,date,service,slots:result,checkedAt:new Date().toISOString()});
 }));
-app.get('/api/availability',auth,handler(async(req,res)=>{const {branch,date,slot,service}=req.query;if(!['PetDay Thảo Điền','PetDay Phú Mỹ Hưng'].includes(branch)||!services[service]||services[service].active===false||!validFutureDate(date)||!validSlot(service,slot))return fail(res,400,'Thời gian hoặc dịch vụ không hợp lệ.');const blocked=await pool.query('SELECT reason FROM blocked_slots WHERE branch=$1 AND booking_date=$2 AND slot=$3',[branch,date,slot]);if(blocked.rowCount)return res.json({remaining:0,available:false,reason:'Khung giờ tạm ngừng nhận lịch: '+blocked.rows[0].reason});const capacity=branch==='PetDay Phú Mỹ Hưng'?Math.max(2,slots[slot]-1):slots[slot];const r=await pool.query("SELECT COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int used FROM bookings WHERE branch=$1 AND booking_date=$2 AND slot=$3 AND status <> 'Đã hủy'",[branch,date,slot]);res.json({remaining:Math.max(0,capacity-r.rows[0].used),available:r.rows[0].used+services[service].units<=capacity});}));
+app.get('/api/availability',auth,handler(async(req,res)=>{const {branch,date,slot,service}=req.query;if(!['PetDay Thảo Điền','PetDay Phú Mỹ Hưng'].includes(branch)||!services[service]||services[service].active===false||!validFutureDate(date)||!validSlot(service,slot))return fail(res,400,'Thời gian hoặc dịch vụ không hợp lệ.');const blocked=await pool.query('SELECT reason FROM blocked_slots WHERE branch=$1 AND booking_date=$2 AND slot=$3',[branch,date,slot]);if(blocked.rowCount)return res.json({remaining:0,available:false,reason:'Khung giờ tạm ngừng nhận lịch: '+blocked.rows[0].reason});const capacity=branch==='PetDay Phú Mỹ Hưng'?Math.max(2,slots[slot]-1):slots[slot];const r=await pool.query("SELECT COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa dịu nhẹ','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int used FROM bookings WHERE branch=$1 AND booking_date=$2 AND slot=$3 AND status <> 'Đã hủy'",[branch,date,slot]);res.json({remaining:Math.max(0,capacity-r.rows[0].used),available:r.rows[0].used+services[service].units<=capacity});}));
 // V6.49: retail-only checkout; independent of care bookings. Supports pickup and home delivery.
 const standaloneOrderSchema=z.object({branch:z.enum(['PetDay Thảo Điền','PetDay Phú Mỹ Hưng']),paymentMethod:z.enum(['cash','bank_transfer']),fulfillmentMethod:z.enum(['pickup','delivery']).default('pickup'),deliveryZone:retailDeliveryZoneSchema.optional(),receiverName:z.string().trim().min(2).max(120).optional(),receiverPhone:z.string().trim().min(8).max(20).optional(),deliveryAddress:z.string().trim().min(12).max(250).optional(),deliveryNote:z.string().trim().max(300).optional().default(''),items:standaloneRetailItemsSchema,idempotencyKey:z.string().min(8).max(100)}).strict();
 app.get('/api/my/retail-orders',auth,handler(async(req,res)=>{
- const r=await pool.query(`SELECT o.id,o.code,o.branch,o.status,o.payment_method AS "paymentMethod",o.payment_status AS "paymentStatus",o.total,o.fulfillment_method AS "fulfillmentMethod",o.delivery_zone AS "deliveryZone",o.receiver_name AS "receiverName",o.receiver_phone AS "receiverPhone",o.delivery_address AS "deliveryAddress",o.delivery_note AS "deliveryNote",o.delivery_fee AS "deliveryFee",o.created_at AS "createdAt",COALESCE(json_agg(json_build_object('name',p.name,'quantity',i.quantity,'unitPrice',i.unit_price) ORDER BY i.id) FILTER(WHERE i.id IS NOT NULL),'[]') AS items
+ const r=await pool.query(`SELECT o.id,o.code,o.branch,o.status,o.payment_method AS "paymentMethod",o.payment_status AS "paymentStatus",o.total,o.fulfillment_method AS "fulfillmentMethod",o.delivery_zone AS "deliveryZone",o.receiver_name AS "receiverName",o.receiver_phone AS "receiverPhone",o.delivery_address AS "deliveryAddress",o.delivery_note AS "deliveryNote",o.delivery_fee AS "deliveryFee",o.delivery_eta AS "deliveryEta",o.created_at AS "createdAt",COALESCE(json_agg(json_build_object('name',p.name,'quantity',i.quantity,'unitPrice',i.unit_price) ORDER BY i.id) FILTER(WHERE i.id IS NOT NULL),'[]') AS items
  FROM retail_orders o LEFT JOIN retail_order_items i ON i.order_id=o.id LEFT JOIN retail_products p ON p.id=i.product_id WHERE o.customer_id=$1 GROUP BY o.id ORDER BY o.created_at DESC LIMIT 80`,[req.user.id]);res.json(r.rows);
 }));
 app.post('/api/retail/orders',auth,handler(async(req,res)=>{
@@ -547,15 +597,19 @@ app.post('/api/retail/orders',auth,handler(async(req,res)=>{
 // V6.81: Customers can report a transfer for a standalone shop order.
 // A report never marks an order paid; only an authorized admin can do that.
 app.post('/api/my/retail-orders/:code/transfer-notice',auth,handler(async(req,res)=>{
- const d=z.object({customerReference:z.string().trim().max(100).default(''),customerNote:z.string().trim().max(300).default(''),senderBank:z.string().trim().min(2).max(100),senderName:z.string().trim().min(2).max(120)}).strict().parse(req.body);
+ const d=z.object({customerReference:z.string().trim().max(100).default(''),customerNote:z.string().trim().max(300).default(''),senderBank:z.string().trim().max(100).default(''),senderName:z.string().trim().max(120).default('')}).strict().parse(req.body);
+ // No self-reported bank identity is required: Admin independently verifies the actual reference/receipt.
  const c=await pool.connect();try{await c.query('BEGIN');
   const q=await c.query('SELECT id,payment_method,payment_status,status FROM retail_orders WHERE code=$1 AND customer_id=$2 FOR UPDATE',[req.params.code,req.user.id]);
   if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy đơn hàng.');}
   const o=q.rows[0];
   const issue=retailTransferNoticeIssue({paymentMethod:o.payment_method,paymentStatus:o.payment_status,status:o.status});
   if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
+  const windowCheck=await c.query('SELECT * FROM payment_qr_sessions WHERE kind=$1 AND code=$2 AND customer_id=$3 FOR UPDATE',['retail',req.params.code,req.user.id]);
+  if(!reportWindowOpen(windowCheck.rows[0])){await c.query('ROLLBACK');return fail(res,409,'Phiên QR hết hạn hoặc đã gửi thông báo. Hãy tạo phiên QR mới hoặc liên hệ nhân viên.');}
+  await c.query('UPDATE payment_qr_sessions SET reported_at=now() WHERE kind=$1 AND code=$2',['retail',req.params.code]);
   await c.query(`INSERT INTO retail_transfer_notices(order_id,customer_reference,customer_note,sender_bank,sender_name)
-   VALUES($1,$2,$3,$4,$5) ON CONFLICT(order_id) DO UPDATE SET customer_reference=EXCLUDED.customer_reference,customer_note=EXCLUDED.customer_note,sender_bank=EXCLUDED.sender_bank,sender_name=EXCLUDED.sender_name,updated_at=now()`,[o.id,d.customerReference||null,d.customerNote||null,d.senderBank,d.senderName]);
+   VALUES($1,$2,$3,$4,$5) ON CONFLICT(order_id) DO UPDATE SET customer_reference=EXCLUDED.customer_reference,customer_note=EXCLUDED.customer_note,sender_bank=EXCLUDED.sender_bank,sender_name=EXCLUDED.sender_name,updated_at=now()`,[o.id,d.customerReference||null,d.customerNote||null,d.senderBank||null,d.senderName||null]);
   await c.query('COMMIT');res.json({ok:true,message:'PetDay đã nhận thông báo. Thanh toán đang chờ quản trị xác nhận.'});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }));
@@ -714,8 +768,8 @@ app.patch('/api/admin/retail/orders/:code',auth,admin,handler(async(req,res)=>{
   const next=await c.query('SELECT * FROM retail_orders WHERE id=$1',[o.id]);await c.query('COMMIT');res.json(next.rows[0]);
  }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Mã giao dịch ngân hàng đã được sử dụng ở đơn khác.');throw e;}finally{c.release();}
 }));
-const bookingSchema=z.object({petId:z.coerce.number().int().positive(),service:z.string().refine(name=>Object.hasOwn(services,name),'Gói dịch vụ không hợp lệ'),branch:z.enum(['PetDay Thảo Điền','PetDay Phú Mỹ Hưng']),date:z.string(),slot:z.string(),idempotencyKey:z.string().min(8).max(100),paymentMethod:z.enum(['cash','bank_transfer']).default('cash'),promoCode:z.string().trim().max(32).optional().default(''),addOns:z.array(z.string()).max(3).default([]),retail:retailSelectionSchema,taxi:z.object({enabled:z.boolean(),zone:z.enum(['nearby','extended']),address:z.string().trim().max(250),phone:z.string().trim().max(20)}).optional()});
-app.post('/api/bookings',auth,handler(async(req,res)=>{const b=bookingSchema.parse(req.body);let taxiFare;try{taxiFare=taxiQuote(b.taxi);}catch(e){return fail(res,422,e.message);}if(b.paymentMethod==='bank_transfer'&&!await paymentRecipient())return fail(res,422,'Chuyển khoản chưa được cấu hình. Vui lòng chọn tiền mặt tại cơ sở.');if(!validFutureDate(b.date)||!validSlot(b.service,b.slot))return fail(res,400,'Ngày hoặc giờ không phù hợp.');const c=await pool.connect();try{await c.query('BEGIN');const existing=await c.query('SELECT * FROM bookings WHERE customer_id=$1 AND idempotency_key=$2',[req.user.id,b.idempotencyKey]);if(existing.rows.length){await c.query('COMMIT');return res.json(existing.rows[0]);}const packageState=await c.query('SELECT is_active FROM service_price_settings WHERE name=$1 FOR SHARE',[b.service]);if(!packageState.rowCount||!packageState.rows[0].is_active){await c.query('ROLLBACK');return fail(res,409,'Gói dịch vụ đã tạm ngừng nhận lịch. Vui lòng chọn gói khác.');}const p=await c.query('SELECT * FROM pets WHERE id=$1 AND owner_id=$2 AND archived_at IS NULL',[b.petId,req.user.id]);if(!p.rows.length){await c.query('ROLLBACK');return fail(res,404,'Hồ sơ thú cưng không thuộc tài khoản.');}let quote,extras;try{quote=calculate(b.service,p.rows[0]);extras=calculateExtras(b.service,b.addOns);}catch(err){await c.query('ROLLBACK');return fail(res,422,err.message||'Dịch vụ hoặc chăm sóc cộng thêm không phù hợp với thú cưng.');}quote.lines.push(...extras.lines);quote.total+=extras.total;let retail;try{retail=await quoteRetail(c,b.retail,true);}catch(err){await c.query('ROLLBACK');return fail(res,422,err.message);}quote.lines.push(...retail.lines);quote.total+=retail.total;if(taxiFare.line){quote.lines.push(taxiFare.line);quote.total+=taxiFare.fee;}let discount=0;let verifiedPromo='';if(b.promoCode){const code=b.promoCode.toUpperCase();const offer=await c.query('SELECT * FROM promotions WHERE code=$1 AND active=true AND starts_at<=now() AND ends_at>now() FOR UPDATE',[code]);if(!offer.rowCount){await c.query('ROLLBACK');return fail(res,422,'Mã ưu đãi không tồn tại hoặc đã hết hạn.');}const o=offer.rows[0];if(quote.total<Number(o.min_order)){await c.query('ROLLBACK');return fail(res,422,'Giá trị dịch vụ chưa đạt mức tối thiểu để áp dụng ưu đãi.');}if(o.service_name&&o.service_name!==b.service){await c.query('ROLLBACK');return fail(res,422,'Mã không áp dụng cho dịch vụ này.');}const used=await c.query("SELECT count(*)::int AS n FROM bookings WHERE promo_code=$1 AND status <> 'Đã hủy'",[code]);if(o.max_uses!==null&&used.rows[0].n>=o.max_uses){await c.query('ROLLBACK');return fail(res,422,'Mã đã hết lượt sử dụng.');}const personal=await c.query("SELECT count(*)::int AS n FROM bookings WHERE promo_code=$1 AND customer_id=$2 AND status <> 'Đã hủy'",[code,req.user.id]);if(personal.rows[0].n>=o.max_per_customer){await c.query('ROLLBACK');return fail(res,422,'Bạn đã sử dụng hết số lần áp dụng mã này.');}discount=o.discount_type==='percent'?Math.floor(quote.total*Number(o.discount_value)/100):Number(o.discount_value);if(o.max_discount!==null)discount=Math.min(discount,Number(o.max_discount));discount=Math.min(discount,quote.total);verifiedPromo=code;}await c.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[b.branch,b.date+' '+b.slot]);const closed=await c.query('SELECT 1 FROM blocked_slots WHERE branch=$1 AND booking_date=$2 AND slot=$3',[b.branch,b.date,b.slot]);if(closed.rowCount){await c.query('ROLLBACK');return fail(res,409,'Khung giờ đã tạm ngừng nhận lịch. Vui lòng chọn giờ khác.');}// V6.45: a pet cannot attend overlapping appointments, even at different branches.
+const bookingSchema=z.object({petId:z.coerce.number().int().positive(),service:z.string().refine(name=>Object.hasOwn(services,name),'Gói dịch vụ không hợp lệ'),branch:z.enum(['PetDay Thảo Điền','PetDay Phú Mỹ Hưng']),date:z.string(),slot:z.string(),idempotencyKey:z.string().min(8).max(100),paymentMethod:z.enum(['cash','bank_transfer']).default('cash'),promoCode:z.string().trim().max(32).optional().default(''),daycarePickupTime:z.string().regex(/^([01]\d|20):[0-5]\d$/).optional(),addOns:z.array(z.string()).max(3).default([]),retail:retailSelectionSchema,taxi:z.object({enabled:z.boolean(),zone:z.enum(['nearby','extended']),address:z.string().trim().max(250),phone:z.string().trim().max(20),direction:z.enum(['pickup','return','round_trip']).default('pickup'),returnAddress:z.string().trim().max(250).optional()}).optional()});
+app.post('/api/bookings',auth,handler(async(req,res)=>{const b=bookingSchema.parse(req.body);let taxiFare;try{taxiFare=taxiQuote(b.taxi);}catch(e){return fail(res,422,e.message);}if(b.paymentMethod==='bank_transfer'&&!await paymentRecipient())return fail(res,422,'Chuyển khoản chưa được cấu hình. Vui lòng chọn tiền mặt tại cơ sở.');if(!validFutureDate(b.date)||!validSlot(b.service,b.slot))return fail(res,400,'Ngày hoặc giờ không phù hợp.');if(services[b.service].category==='Daycare'&&b.daycarePickupTime){const min=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5));const duration=services[b.service].duration;const actual=min(b.daycarePickupTime)-min(b.slot);if(actual<60||actual>duration||min(b.daycarePickupTime)>1200)return fail(res,422,'Giờ trả pet phải sau giờ nhận ít nhất 1 giờ, trong phạm vi gói và trước 20:00.');}const c=await pool.connect();try{await c.query('BEGIN');const existing=await c.query('SELECT * FROM bookings WHERE customer_id=$1 AND idempotency_key=$2',[req.user.id,b.idempotencyKey]);if(existing.rows.length){await c.query('COMMIT');return res.json(existing.rows[0]);}const packageState=await c.query('SELECT is_active FROM service_price_settings WHERE name=$1 FOR SHARE',[b.service]);if(!packageState.rowCount||!packageState.rows[0].is_active){await c.query('ROLLBACK');return fail(res,409,'Gói dịch vụ đã tạm ngừng nhận lịch. Vui lòng chọn gói khác.');}const p=await c.query('SELECT * FROM pets WHERE id=$1 AND owner_id=$2 AND archived_at IS NULL',[b.petId,req.user.id]);if(!p.rows.length){await c.query('ROLLBACK');return fail(res,404,'Hồ sơ thú cưng không thuộc tài khoản.');}let quote,extras;try{quote=calculate(b.service,p.rows[0]);extras=calculateExtras(b.service,b.addOns);}catch(err){await c.query('ROLLBACK');return fail(res,422,err.message||'Dịch vụ hoặc chăm sóc cộng thêm không phù hợp với thú cưng.');}quote.lines.push(...extras.lines);quote.total+=extras.total;if(services[b.service].category==='Daycare'){const min=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5));const target=min(b.slot)+services[b.service].duration;const pickup=b.daycarePickupTime||`${String(Math.floor(target/60)).padStart(2,'0')}:${String(target%60).padStart(2,'0')}`;quote.lines.push({type:'schedule',label:'Giờ gửi '+b.slot+' · giờ trả '+pickup,amount:0});}let retail;try{retail=await quoteRetail(c,b.retail,true);}catch(err){await c.query('ROLLBACK');return fail(res,422,err.message);}quote.lines.push(...retail.lines);quote.total+=retail.total;if(taxiFare.line){quote.lines.push(taxiFare.line);quote.total+=taxiFare.fee;}let discount=0;let verifiedPromo='';if(b.promoCode){const code=b.promoCode.toUpperCase();const offer=await c.query('SELECT * FROM promotions WHERE code=$1 AND active=true AND starts_at<=now() AND ends_at>now() FOR UPDATE',[code]);if(!offer.rowCount){await c.query('ROLLBACK');return fail(res,422,'Mã ưu đãi không tồn tại hoặc đã hết hạn.');}const o=offer.rows[0];if(quote.total<Number(o.min_order)){await c.query('ROLLBACK');return fail(res,422,'Giá trị dịch vụ chưa đạt mức tối thiểu để áp dụng ưu đãi.');}if(o.service_name&&o.service_name!==b.service){await c.query('ROLLBACK');return fail(res,422,'Mã không áp dụng cho dịch vụ này.');}const used=await c.query("SELECT count(*)::int AS n FROM bookings WHERE promo_code=$1 AND status <> 'Đã hủy'",[code]);if(o.max_uses!==null&&used.rows[0].n>=o.max_uses){await c.query('ROLLBACK');return fail(res,422,'Mã đã hết lượt sử dụng.');}const personal=await c.query("SELECT count(*)::int AS n FROM bookings WHERE promo_code=$1 AND customer_id=$2 AND status <> 'Đã hủy'",[code,req.user.id]);if(personal.rows[0].n>=o.max_per_customer){await c.query('ROLLBACK');return fail(res,422,'Bạn đã sử dụng hết số lần áp dụng mã này.');}discount=o.discount_type==='percent'?Math.floor(quote.total*Number(o.discount_value)/100):Number(o.discount_value);if(o.max_discount!==null)discount=Math.min(discount,Number(o.max_discount));discount=Math.min(discount,quote.total);verifiedPromo=code;}await c.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[b.branch,b.date+' '+b.slot]);const closed=await c.query('SELECT 1 FROM blocked_slots WHERE branch=$1 AND booking_date=$2 AND slot=$3',[b.branch,b.date,b.slot]);if(closed.rowCount){await c.query('ROLLBACK');return fail(res,409,'Khung giờ đã tạm ngừng nhận lịch. Vui lòng chọn giờ khác.');}// V6.45: a pet cannot attend overlapping appointments, even at different branches.
 // The per-pet/date advisory lock serializes concurrent submissions for the same pet.
 await c.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', ['petday-pet-'+b.petId,b.date]);
 const petSameDay=await c.query("SELECT service,slot FROM bookings WHERE pet_id=$1 AND booking_date=$2 AND status NOT IN ('Đã hủy','Không đến')",[b.petId,b.date]);
@@ -723,7 +777,7 @@ if(petSameDay.rows.some(existing=>servicesOverlap(existing.service,existing.slot
  await c.query('ROLLBACK');
  return fail(res,409,'Thú cưng đã có lịch trùng thời gian. Hãy chọn khung giờ khác cho dịch vụ thứ hai.');
 }
-const limit=b.branch==='PetDay Phú Mỹ Hưng'?Math.max(2,slots[b.slot]-1):slots[b.slot];const used=await c.query("SELECT COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int used FROM bookings WHERE branch=$1 AND booking_date=$2 AND slot=$3 AND status <> 'Đã hủy'",[b.branch,b.date,b.slot]);if(used.rows[0].used+services[b.service].units>limit){await c.query('ROLLBACK');return fail(res,409,'Khung giờ vừa hết chỗ. Vui lòng chọn lại.');}if(discount>0){quote.lines.push({label:'Ưu đãi '+verifiedPromo,amount:-discount});quote.total-=discount;}const code='PD-'+randomUUID().replaceAll('-','').slice(0,10).toUpperCase();const r=await c.query('INSERT INTO bookings(code,customer_id,pet_id,service,branch,booking_date,slot,line_items,total,idempotency_key,payment_method,promo_code) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',[code,req.user.id,b.petId,b.service,b.branch,b.date,b.slot,JSON.stringify(quote.lines),quote.total,b.idempotencyKey,b.paymentMethod,verifiedPromo||null]);for(const item of retail.items){await c.query('UPDATE retail_products SET stock=stock-$1,updated_at=now() WHERE id=$2',[item.quantity,item.id]);await c.query('INSERT INTO booking_retail_items(booking_id,product_id,quantity,unit_price) VALUES($1,$2,$3,$4)',[r.rows[0].id,item.id,item.quantity,item.unitPrice]);}if(taxiFare.line){await c.query('INSERT INTO pet_taxi_requests(booking_id,zone,pickup_address,contact_phone,fee,status) VALUES($1,$2,$3,$4,$5,$6)',[r.rows[0].id,b.taxi.zone,b.taxi.address.trim(),b.taxi.phone.trim(),taxiFare.fee,'requested']);}await notify(c,req.user.id,'Đã tiếp nhận lịch '+code,'Lịch đang chờ nhân viên xác nhận. Thanh toán sẽ được đối soát riêng.',code);await c.query('COMMIT');res.status(201).json(r.rows[0]);}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}));
+const limit=b.branch==='PetDay Phú Mỹ Hưng'?Math.max(2,slots[b.slot]-1):slots[b.slot];const used=await c.query("SELECT COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa dịu nhẹ','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int used FROM bookings WHERE branch=$1 AND booking_date=$2 AND slot=$3 AND status <> 'Đã hủy'",[b.branch,b.date,b.slot]);if(used.rows[0].used+services[b.service].units>limit){await c.query('ROLLBACK');return fail(res,409,'Khung giờ vừa hết chỗ. Vui lòng chọn lại.');}if(discount>0){quote.lines.push({label:'Ưu đãi '+verifiedPromo,amount:-discount});quote.total-=discount;}const code='PD-'+randomUUID().replaceAll('-','').slice(0,10).toUpperCase();const r=await c.query('INSERT INTO bookings(code,customer_id,pet_id,service,branch,booking_date,slot,line_items,total,idempotency_key,payment_method,promo_code) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *',[code,req.user.id,b.petId,b.service,b.branch,b.date,b.slot,JSON.stringify(quote.lines),quote.total,b.idempotencyKey,b.paymentMethod,verifiedPromo||null]);for(const item of retail.items){await c.query('UPDATE retail_products SET stock=stock-$1,updated_at=now() WHERE id=$2',[item.quantity,item.id]);await c.query('INSERT INTO booking_retail_items(booking_id,product_id,quantity,unit_price) VALUES($1,$2,$3,$4)',[r.rows[0].id,item.id,item.quantity,item.unitPrice]);}if(taxiFare.line){await c.query('INSERT INTO pet_taxi_requests(booking_id,zone,pickup_address,contact_phone,fee,status,direction,return_address) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',[r.rows[0].id,b.taxi.zone,b.taxi.address.trim(),b.taxi.phone.trim(),taxiFare.fee,'requested',b.taxi.direction||'pickup',(b.taxi.returnAddress||b.taxi.address).trim()]);}await notify(c,req.user.id,'Đã tiếp nhận lịch '+code,'Lịch đang chờ nhân viên xác nhận. Thanh toán sẽ được đối soát riêng.',code);await c.query('COMMIT');res.status(201).json(r.rows[0]);}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}));
 
 // Release the exclusive staff slot while retaining an audit trail when an appointment moves or is cancelled.
 async function releaseStaff(client, bookingId, actorId, reason){
@@ -731,7 +785,7 @@ async function releaseStaff(client, bookingId, actorId, reason){
  if(found.rowCount)await client.query('INSERT INTO staff_assignment_events(booking_id,staff_id,action,changed_by,note) VALUES($1,$2,$3,$4,$5)',[bookingId,found.rows[0].staff_id,'released',actorId,reason]);
 }
 
-const detailSQL=`SELECT i.emergency_phone AS "intakeEmergencyPhone",i.health_alerts AS "intakeHealthAlerts",i.care_instructions AS "intakeCareInstructions",i.updated_at AS "intakeUpdatedAt",am.full_name AS "assignedStaff",a.staff_id AS "assignedStaffId",b.id,b.code,b.customer_id,b.pet_id AS "petId",b.service,b.branch,to_char(b.booking_date,'YYYY-MM-DD') AS date,b.slot,b.status,b.payment_status AS "paymentStatus",b.payment_method AS "paymentMethod",b.line_items AS "lineItems",b.total,b.promo_code AS "promoCode",b.created_at AS "createdAt",p.name AS "petName",u.full_name AS "ownerName",cr.notes AS "careNotes",to_char(cr.care_date,'YYYY-MM-DD') AS "careDate",r.rating,r.comment,ns.reason AS "noShowReason",ns.recorded_at AS "noShowAt",tx.status AS "taxiStatus",tx.zone AS "taxiZone",tx.pickup_address AS "taxiAddress",tx.contact_phone AS "taxiPhone",tx.fee AS "taxiFee" FROM bookings b JOIN pets p ON p.id=b.pet_id JOIN users u ON u.id=b.customer_id LEFT JOIN care_records cr ON cr.booking_id=b.id LEFT JOIN reviews r ON r.booking_id=b.id LEFT JOIN booking_assignments a ON a.booking_id=b.id LEFT JOIN staff_members am ON am.id=a.staff_id LEFT JOIN booking_no_shows ns ON ns.booking_id=b.id LEFT JOIN pet_taxi_requests tx ON tx.booking_id=b.id LEFT JOIN booking_intake_forms i ON i.booking_id=b.id`;
+const detailSQL=`SELECT i.emergency_phone AS "intakeEmergencyPhone",i.health_alerts AS "intakeHealthAlerts",i.care_instructions AS "intakeCareInstructions",i.updated_at AS "intakeUpdatedAt",am.full_name AS "assignedStaff",a.staff_id AS "assignedStaffId",b.id,b.code,b.customer_id,b.pet_id AS "petId",b.service,b.branch,to_char(b.booking_date,'YYYY-MM-DD') AS date,b.slot,b.status,EXISTS(SELECT 1 FROM service_events se WHERE se.booking_id=b.id AND se.event_type='check_out') AS "careCompleted",EXISTS(SELECT 1 FROM service_events se WHERE se.booking_id=b.id AND se.event_type='pet_handed_over') AS "petHandedOver",b.payment_status AS "paymentStatus",b.payment_method AS "paymentMethod",b.line_items AS "lineItems",b.total,b.promo_code AS "promoCode",b.created_at AS "createdAt",p.name AS "petName",u.full_name AS "ownerName",cr.notes AS "careNotes",to_char(cr.care_date,'YYYY-MM-DD') AS "careDate",r.rating,r.comment,ns.reason AS "noShowReason",ns.recorded_at AS "noShowAt",tx.status AS "taxiStatus",tx.zone AS "taxiZone",tx.pickup_address AS "taxiAddress",tx.contact_phone AS "taxiPhone",tx.fee AS "taxiFee",tx.direction AS "taxiDirection",tx.return_address AS "taxiReturnAddress",tx.return_completed_at AS "taxiReturnCompletedAt",(SELECT tl.state FROM pet_taxi_legs tl WHERE tl.booking_id=b.id AND tl.leg='return' ORDER BY tl.id DESC LIMIT 1) AS "taxiReturnState" FROM bookings b JOIN pets p ON p.id=b.pet_id JOIN users u ON u.id=b.customer_id LEFT JOIN care_records cr ON cr.booking_id=b.id LEFT JOIN reviews r ON r.booking_id=b.id LEFT JOIN booking_assignments a ON a.booking_id=b.id LEFT JOIN staff_members am ON am.id=a.staff_id LEFT JOIN booking_no_shows ns ON ns.booking_id=b.id LEFT JOIN pet_taxi_requests tx ON tx.booking_id=b.id LEFT JOIN booking_intake_forms i ON i.booking_id=b.id`;
 app.get('/api/bookings',auth,handler(async(req,res)=>{
  let where='',params=[];
  if(req.user.role==='customer'){where=' WHERE b.customer_id=$1';params=[req.user.id];}
@@ -781,42 +835,314 @@ app.post('/api/admin/bookings/:code/no-show',auth,admin,handler(async(req,res)=>
   const preflight=noShowIssue({status:b.status,paymentStatus:b.payment_status,hasServiceEvent:false});
   if(preflight){await c.query('ROLLBACK');return fail(res,409,preflight);}
   // A completed Pet Taxi handover is evidence of arrival; no-show must be forbidden on the server as well.
-  const taxiDelivered=await c.query("SELECT 1 FROM pet_taxi_requests WHERE booking_id=$1 AND status='completed' LIMIT 1",[b.id]);
+  const taxiDelivered=await c.query("SELECT 1 FROM pet_taxi_requests WHERE booking_id=$1 AND direction IN ('pickup','round_trip') AND status='completed' LIMIT 1",[b.id]);
   if(taxiDelivered.rowCount){await c.query('ROLLBACK');return fail(res,409,'Pet Taxi đã bàn giao thú cưng tại cơ sở. Không thể ghi nhận khách không đến.');}
+  const selfArrived=await c.query("SELECT 1 FROM pet_taxi_legs WHERE booking_id=$1 AND leg='pickup' AND state='completed'",[b.id]);
+  if(selfArrived.rowCount){await c.query('ROLLBACK');return fail(res,409,'Đã ghi nhận đón pet thành công.');}
+
   const arrived=await c.query('SELECT 1 FROM service_events WHERE booking_id=$1 LIMIT 1',[b.id]);
   if(arrived.rowCount){await c.query('ROLLBACK');return fail(res,409,noShowIssue({status:b.status,paymentStatus:b.payment_status,hasServiceEvent:true}));}
-  // An early no-show is an explicit administrative declaration, not inferred attendance.
+  // Confirm no-show only after the actual check-in grace period (15 min for spa/grooming, 30 min daycare).
+  const schedule=await c.query("SELECT to_char(booking_date,'YYYY-MM-DD') AS date,slot,service FROM bookings WHERE id=$1",[b.id]);
+  const scheduledAt=Date.parse(schedule.rows[0].date+'T'+schedule.rows[0].slot.slice(0,5)+':00+07:00');
+  const grace=schedule.rows[0].service.startsWith('Daycare')?30:15;
+  if(!Number.isFinite(scheduledAt)||Date.now()<scheduledAt+grace*60000){await c.query('ROLLBACK');return fail(res,409,'Chưa hết thời gian nhận pet ('+grace+' phút sau giờ bắt đầu). Không thể ghi No-show sớm.');}
   // An existing pending cancellation decision must not survive a closed booking.
   await c.query('INSERT INTO booking_no_shows(booking_id,recorded_by,reason) VALUES($1,$2,$3)',[b.id,req.user.id,d.reason]);
-  // Paid no-show: preserve the receipt and open a separate, auditable refund review.
-  // No automatic approval, fee deduction, or claim of a bank refund.
-  if(b.payment_status==='Đã thanh toán'){
-   await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason)
-      VALUES($1,$2,$3,$4) ON CONFLICT (booking_id) DO NOTHING`,
-     [b.id,b.customer_id,b.total,'Khách chưa sử dụng dịch vụ; theo chính sách PetDay hoàn 100% khoản đã thu. Ghi nhận: '+d.reason]);
-  }
+  // No-show is NOT a customer's cancellation request and NOT a PetDay cancellation.
+  // Never create a 100% refund merely because a customer did not attend.
+  // Fees for unperformed taxi directions must be reviewed separately.
   await releaseStaff(c,b.id,req.user.id,'Khách không đến lịch hẹn');
+  await closeUnusedTaxiLegs(c,b.id,req.user.id,'Lịch chăm sóc đóng vì khách không đến; các chiều chưa xuất phát không còn điều phối.');
   await c.query("UPDATE bookings SET status='Đã hủy' WHERE id=$1",[b.id]);
   await c.query("UPDATE booking_cancellation_requests SET status='rejected',admin_note=$2,resolved_at=now(),resolved_by=$3 WHERE booking_id=$1 AND status='pending'",[b.id,'Lịch đã đóng do Admin ghi nhận khách không đến: '+d.reason,req.user.id]);
-  await notify(c,b.customer_id,'Lịch '+b.code+' được ghi nhận không đến','Lịch đã đóng vì khách không đến. Nếu đã thanh toán, PetDay sẽ xử lý hoàn 100% qua hồ sơ hoàn tiền; chỉ ghi đã hoàn sau khi Admin xác nhận hoàn tất. Lý do: '+d.reason,b.code);
+  await notify(c,b.customer_id,'Lịch '+b.code+' được ghi nhận không đến','Lịch đã đóng với lý do khách không đến (không phải yêu cầu khách hủy). Mọi khoản hoàn nếu có cần đối soát riêng, đặc biệt phí Taxi chưa sử dụng. Lý do: '+d.reason,b.code);
   await c.query('COMMIT');res.json({ok:true,code:b.code,status:'Đã hủy',noShowReason:d.reason});
+ }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+}));
+// V6.104.5 — The collected amount is evidenced by immutable receipts; selecting
+// a method, reporting QR, or waiving a taxi leg never creates a receipt.
+async function getBookingSettlement(c,bookingId){
+ const base=await c.query('SELECT id,code,total,status,payment_method,payment_status FROM bookings WHERE id=$1',[bookingId]);
+ if(!base.rowCount)return null;
+ const b=base.rows[0];
+ const [receipts,legs,refunds]=await Promise.all([
+  c.query('SELECT COALESCE(SUM(amount),0)::bigint AS amount FROM booking_payment_receipts WHERE booking_id=$1',[bookingId]),
+  c.query('SELECT leg,fee,state,refund_due FROM pet_taxi_legs WHERE booking_id=$1 ORDER BY leg',[bookingId]),
+  c.query(`SELECT
+   (SELECT COALESCE(SUM(amount),0) FROM refund_requests WHERE booking_id=$1 AND status='completed') +
+   (SELECT COALESCE(SUM(amount),0) FROM taxi_refund_requests WHERE booking_id=$1 AND status='completed') AS completed,
+   (SELECT COALESCE(SUM(amount),0) FROM refund_requests WHERE booking_id=$1 AND status IN ('pending','approved')) +
+   (SELECT COALESCE(SUM(amount),0) FROM taxi_refund_requests WHERE booking_id=$1 AND status IN ('pending','approved')) AS reserved`,[bookingId])
+ ]);
+ const total=Number(b.total),collected=Number(receipts.rows[0].amount);
+ const taxiWaived=legs.rows.reduce((sum,l)=>sum+Number(l.refund_due||0),0);
+ const completedRefund=Number(refunds.rows[0].completed||0);
+ const reservedRefund=Number(refunds.rows[0].reserved||0);
+ // Service refund requests reduce the retained service charge separately from taxi waivers.
+ // Paid or reserved refunds must be subtracted once, never twice.
+ const serviceRefunds=await c.query("SELECT COALESCE(SUM(amount),0)::bigint AS amount FROM refund_requests WHERE booking_id=$1 AND status IN ('pending','approved','completed')",[bookingId]);
+ const {charge,outstanding,refundCandidate}=settle({total,collected,taxiWaived,serviceReserved:Number(serviceRefunds.rows[0].amount),refundCompleted:completedRefund,refundPending:reservedRefund});
+ return {code:b.code,method:b.payment_method,paymentStatus:b.payment_status,bookingStatus:b.status,total,collected,taxiWaived,charge,completedRefund,reservedRefund,
+  outstanding,refundCandidate,
+  needsCancellationReview:b.status==='Đã hủy',legs:legs.rows.map(l=>({leg:l.leg,fee:Number(l.fee),state:l.state,waived:Number(l.refund_due||0),charge:Number(l.fee)-Number(l.refund_due||0)}))};
+}
+// Auditable settlement for both cash and bank transfers. Cash may be recorded in
+// parts. Bank transfer requires a previously reported QR notice and real reference.
+app.get('/api/admin/bookings/:code/settlement',auth,admin,handler(async(req,res)=>{
+ const b=await pool.query('SELECT id FROM bookings WHERE code=$1',[req.params.code]);
+ if(!b.rowCount)return fail(res,404,'Không thấy lịch.');
+ res.json(await getBookingSettlement(pool,b.rows[0].id));
+}));
+app.post('/api/admin/bookings/:code/receipts',auth,admin,handler(async(req,res)=>{
+ const d=z.object({amount:z.number().int().positive(),reference:z.string().trim().max(120).default(''),note:z.string().trim().max(300).default('')}).strict().parse(req.body);
+ const c=await pool.connect();try{await c.query('BEGIN');
+ const b=await c.query('SELECT id,payment_method,status FROM bookings WHERE code=$1 FOR UPDATE',[req.params.code]);
+ if(!b.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch.');}
+ const booking=b.rows[0];
+ if(booking.status==='Đã hủy'){await c.query('ROLLBACK');return fail(res,409,'Lịch đã hủy cần quyết toán dịch vụ trước khi ghi thu thêm.');}
+ const record=await getBookingSettlement(c,booking.id);
+ if(d.amount>record.outstanding){await c.query('ROLLBACK');return fail(res,409,'Số tiền ghi thu vượt số còn phải thu sau khi điều chỉnh Taxi.');}
+ if(booking.payment_method==='bank_transfer'){
+  if(!d.reference||d.reference.length<4){await c.query('ROLLBACK');return fail(res,422,'Chuyển khoản cần mã giao dịch đối soát.');}
+  const notice=await c.query(`SELECT 1 FROM bank_transfer_notices n
+    JOIN bookings b ON b.id=n.booking_id JOIN payment_qr_sessions qr ON qr.kind='booking' AND qr.code=$2 AND qr.customer_id=b.customer_id
+    WHERE n.booking_id=$1 AND qr.reported_at IS NOT NULL LIMIT 1`,[booking.id,req.params.code]);
+  if(!notice.rowCount){await c.query('ROLLBACK');return fail(res,409,'Khách chưa báo chuyển khoản qua QR; không được tự xác nhận tiền.');}
+ }
+ if(d.reference){const dupe=await c.query('SELECT 1 FROM booking_payment_receipts WHERE reference=$1 LIMIT 1',[d.reference]);if(dupe.rowCount){await c.query('ROLLBACK');return fail(res,409,'Mã biên nhận/giao dịch đã được ghi thu.');}}
+ await c.query('INSERT INTO booking_payment_receipts(booking_id,amount,method,reference,note,recorded_by) VALUES($1,$2,$3,$4,$5,$6)',[booking.id,d.amount,booking.payment_method,d.reference||null,d.note||null,req.user.id]);
+ const remaining=record.outstanding-d.amount;
+ await c.query('UPDATE bookings SET payment_status=$1 WHERE id=$2',[remaining===0?'Đã thanh toán':'Chưa thanh toán',booking.id]);
+ await c.query('INSERT INTO payment_events(booking_id,admin_id,previous_status,new_status,reference,note) VALUES($1,$2,$3,$4,$5,$6)',[booking.id,req.user.id,record.paymentStatus,remaining===0?'Đã thanh toán':'Chưa thanh toán',d.reference||null,`Thực thu ${d.amount}đ. Còn phải thu ${remaining}đ. ${d.note}`]);
+ await notify(c,(await c.query('SELECT customer_id FROM bookings WHERE id=$1',[booking.id])).rows[0].customer_id,'Đối soát thanh toán '+req.params.code,'Đã ghi nhận thực thu '+d.amount.toLocaleString('vi-VN')+'đ. Còn phải thu '+remaining.toLocaleString('vi-VN')+'đ.',req.params.code);
+ await c.query('COMMIT');res.json({ok:true,remaining,recorded:d.amount});
+ }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Biên nhận đã tồn tại.');throw e;}finally{c.release();}
+}));
+// V6.104.1 — Taxi refunds are a separate manual ledger for each direction.
+// A preview is NOT a payment. No automatic bank transfer is performed.
+const taxiRefundDecision=z.discriminatedUnion('decision',[
+ z.object({decision:z.literal('approve'),note:z.string().trim().max(500).default('')}).strict(),
+ z.object({decision:z.literal('reject'),note:z.string().trim().min(8).max(500)}).strict(),
+ z.object({decision:z.literal('complete'),reference:z.string().trim().min(4).max(120),note:z.string().trim().max(500).default('')}).strict()
+]);
+// Reserved refunds include pending and approved cases, so two Admin sessions cannot
+// separately approve the same money. Both refund ledgers share a booking lock.
+async function bookingRefundAllocation(c,bookingId){
+ const service=await c.query("SELECT COALESCE(SUM(amount),0)::bigint AS sum FROM refund_requests WHERE booking_id=$1 AND status IN ('pending','approved','completed')",[bookingId]);
+ const taxi=await c.query("SELECT COALESCE(SUM(amount),0)::bigint AS sum FROM taxi_refund_requests WHERE booking_id=$1 AND status IN ('pending','approved','completed')",[bookingId]);
+ return {service:Number(service.rows[0].sum),taxi:Number(taxi.rows[0].sum)};
+}
+app.get('/api/admin/taxi-refunds',auth,admin,handler(async(req,res)=>{
+ const q=await pool.query(`SELECT l.id AS "legId",l.leg,l.fee,l.state,l.refund_due AS "refundDue",l.issue_note AS "issueNote",
+ b.id AS "bookingId",b.code,b.total,b.payment_status AS "paymentStatus",u.full_name AS "customerName",
+ r.id AS "refundId",r.amount AS "refundAmount",r.status AS "refundStatus",r.admin_note AS "adminNote",r.refund_reference AS "refundReference",
+ r.created_at AS "createdAt",r.completed_at AS "completedAt"
+ FROM pet_taxi_legs l JOIN bookings b ON b.id=l.booking_id JOIN users u ON u.id=b.customer_id
+ LEFT JOIN taxi_refund_requests r ON r.taxi_leg_id=l.id
+ WHERE l.refund_due>0 OR r.id IS NOT NULL
+ ORDER BY CASE WHEN r.status='pending' THEN 0 WHEN r.status='approved' THEN 1 ELSE 2 END,l.updated_at DESC LIMIT 200`);
+ res.json(q.rows);
+}));
+app.get('/api/my/taxi-refunds',auth,handler(async(req,res)=>{
+ const q=await pool.query(`SELECT l.leg,l.fee,l.state,l.refund_due AS "refundDue",b.code,
+ b.payment_status AS "paymentStatus",r.id AS "refundId",r.amount AS "refundAmount",r.status AS "refundStatus",
+ r.admin_note AS "adminNote",r.refund_reference AS "refundReference",r.completed_at AS "completedAt"
+ FROM pet_taxi_legs l JOIN bookings b ON b.id=l.booking_id
+ LEFT JOIN taxi_refund_requests r ON r.taxi_leg_id=l.id
+ WHERE b.customer_id=$1 AND (l.refund_due>0 OR r.id IS NOT NULL)
+ ORDER BY l.updated_at DESC LIMIT 100`,[req.user.id]);res.json(q.rows);
+}));
+app.post('/api/admin/taxi-refunds/:legId',auth,admin,handler(async(req,res)=>{
+ const c=await pool.connect();try{await c.query('BEGIN');
+ const q=await c.query(`SELECT l.*,b.code,b.total,b.customer_id,b.payment_status FROM pet_taxi_legs l JOIN bookings b ON b.id=l.booking_id WHERE l.id=$1 FOR UPDATE OF l,b`,[req.params.legId]);
+ if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy chiều Taxi.');}
+ const r=q.rows[0];
+ const existing=await c.query('SELECT id FROM taxi_refund_requests WHERE taxi_leg_id=$1',[r.id]);
+ if(existing.rowCount){await c.query('ROLLBACK');return fail(res,409,'Chiều Taxi này đã có hồ sơ hoàn tiền.');}
+ const allocation=await bookingRefundAllocation(c,r.booking_id);
+ const settlement=await getBookingSettlement(c,r.booking_id);
+ const amount=refundableTaxiAmount({refundDue:Number(r.refund_due),refundCandidate:settlement.refundCandidate});
+ if(amount<=0){await c.query('ROLLBACK');return fail(res,409,'Chưa có khoản thực thu dư để hoàn. Chỉ ghi giảm số phải thu trên hóa đơn.');}
+ const issue=taxiRefundCreateIssue({state:r.state,refundDue:amount,fee:r.fee,collected:settlement.collected,serviceReserved:allocation.service,taxiReserved:allocation.taxi});
+ if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
+ const ins=await c.query(`INSERT INTO taxi_refund_requests(taxi_leg_id,booking_id,customer_id,amount,reason)
+ VALUES($1,$2,$3,$4,$5) RETURNING id,status,amount`,[r.id,r.booking_id,r.customer_id,amount,(r.leg==='pickup'?'Chiều đón':'Chiều về')+' · '+(r.issue_note||'Chuyến không sử dụng')]);
+ await notify(c,r.customer_id,'Hồ sơ hoàn Pet Taxi · '+r.code,'Đã ghi nhận hoàn dự kiến '+amount.toLocaleString('vi-VN')+'đ cho '+(r.leg==='pickup'?'chiều đón':'chiều về')+'. Chờ Admin xét duyệt; chưa hoàn tiền.',r.code);
+ await c.query('COMMIT');res.status(201).json(ins.rows[0]);
+ }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Chiều Taxi đã có hồ sơ hoàn tiền.');throw e;}finally{c.release();}
+}));
+app.patch('/api/admin/taxi-refunds/:id',auth,admin,handler(async(req,res)=>{
+ const d=taxiRefundDecision.parse(req.body);
+ const c=await pool.connect();try{await c.query('BEGIN');
+ const q=await c.query(`SELECT r.*,l.leg,l.refund_due,l.state,b.total,b.code,b.payment_status,b.customer_id
+ FROM taxi_refund_requests r JOIN pet_taxi_legs l ON l.id=r.taxi_leg_id JOIN bookings b ON b.id=r.booking_id
+ WHERE r.id=$1 FOR UPDATE OF r,l,b`,[req.params.id]);
+ if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy hồ sơ hoàn Taxi.');}
+ const r=q.rows[0];
+ // Only actual receipts, not the booking's full-payment flag, evidence collected money.
+ const actualReceipts=await c.query('SELECT COALESCE(SUM(amount),0)::bigint AS collected FROM booking_payment_receipts WHERE booking_id=$1',[r.booking_id]);
+ if(Number(actualReceipts.rows[0].collected)<Number(r.amount)){await c.query('ROLLBACK');return fail(res,409,'Số tiền hoàn vượt tiền thực thu.');}
+ const transitionIssue=taxiRefundTransitionIssue(r.status,d.decision);
+ if(transitionIssue){await c.query('ROLLBACK');return fail(res,409,transitionIssue);}
+ if(d.decision==='approve'){
+  if(!['customer_self','cancelled','provider_fault'].includes(r.state)||Number(r.refund_due)<Number(r.amount)){
+   await c.query('ROLLBACK');return fail(res,409,'Số tiền/trạng thái Taxi đã thay đổi; cần xác minh trước khi duyệt.');
+  }
+  const allocated=await bookingRefundAllocation(c,r.booking_id);
+  const settlement=await getBookingSettlement(c,r.booking_id);
+  if(allocated.service+allocated.taxi>settlement.collected){
+   await c.query('ROLLBACK');return fail(res,409,'Tổng tiền hoàn vượt khoản đã thu.');
+  }
+ }
+ if(d.decision==='complete'){
+  const dup=await c.query("SELECT 1 FROM taxi_refund_requests WHERE refund_reference=$1 AND id<>$2 UNION ALL SELECT 1 FROM refund_requests WHERE refund_reference=$1 LIMIT 1",[d.reference,r.id]);
+  if(dup.rowCount){await c.query('ROLLBACK');return fail(res,409,'Mã đối soát đã được sử dụng.');}
+ }
+ const next={approve:'approved',reject:'rejected',complete:'completed'}[d.decision];
+ const upd=await c.query(`UPDATE taxi_refund_requests SET status=$1,admin_note=$2,refund_reference=CASE WHEN $1='completed' THEN $3 ELSE refund_reference END,
+ processed_by=$4,updated_at=now(),completed_at=CASE WHEN $1='completed' THEN now() ELSE completed_at END
+ WHERE id=$5 RETURNING id,status,amount`,[next,d.note,d.decision==='complete'?d.reference:null,req.user.id,r.id]);
+ await c.query(`INSERT INTO taxi_refund_events(refund_id,actor_id,previous_status,new_status,note,reference)
+ VALUES($1,$2,$3,$4,$5,$6)`,[r.id,req.user.id,r.status,next,d.note,d.decision==='complete'?d.reference:null]);
+ await notify(c,r.customer_id,'Hoàn Pet Taxi · '+r.code,next==='completed'?'Đã ghi nhận hoàn '+Number(r.amount).toLocaleString('vi-VN')+'đ. Mã đối soát: '+d.reference:next==='approved'?'Khoản hoàn Taxi '+Number(r.amount).toLocaleString('vi-VN')+'đ đã được duyệt, đang chờ thực hiện.':'Hồ sơ hoàn Taxi chưa được chấp thuận. Xem lý do trong tài khoản.',r.code);
+ await c.query('COMMIT');res.json(upd.rows[0]);
+ }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Mã đối soát đã được sử dụng.');throw e;}finally{c.release();}
+}));
+
+// V6.103.7 — each taxi direction has an independent incident and accounting record.
+// Migration 051 is required before these endpoints can be used.
+async function ensureTaxiLegs(c,bookingCode){
+ const q=await c.query(`SELECT t.id,t.booking_id,t.direction,t.fee,t.status,t.return_completed_at,b.customer_id,b.status AS booking_status
+ FROM pet_taxi_requests t JOIN bookings b ON b.id=t.booking_id WHERE b.code=$1`,[bookingCode]);
+ if(!q.rowCount)return null;
+ const t=q.rows[0];
+ await bootstrapTaxiLegs(c,t);
+ return t;
+}
+app.get('/api/bookings/:code/taxi/legs',auth,handler(async(req,res)=>{
+ const c=await pool.connect();try{
+  await c.query('BEGIN');const t=await ensureTaxiLegs(c,req.params.code);
+  if(!t){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy yêu cầu Pet Taxi.');}
+  if(req.user.role!=='admin'&&Number(t.customer_id)!==Number(req.user.id)){await c.query('ROLLBACK');return fail(res,403,'Không có quyền xem chuyến Taxi này.');}
+  const q=await c.query(`SELECT id,leg,fee,state,scheduled_at AS "scheduledAt",departed_at AS "departedAt",arrived_at AS "arrivedAt",
+   contact_count AS "contactCount",arrived_correctly AS "arrivedCorrectly",issue_note AS "issueNote",customer_plan AS "customerPlan",refund_due AS "refundDue",updated_at AS "updatedAt"
+   FROM pet_taxi_legs WHERE booking_id=$1 ORDER BY CASE leg WHEN 'pickup' THEN 0 ELSE 1 END`,[t.booking_id]);
+  const events=await c.query(`SELECT e.taxi_leg_id AS "legId",e.action,e.previous_state AS "previousState",e.next_state AS "nextState",e.created_at AS "at",e.note
+   FROM pet_taxi_leg_events e JOIN pet_taxi_legs l ON l.id=e.taxi_leg_id
+   WHERE l.booking_id=$1 ORDER BY e.created_at DESC,e.id DESC LIMIT 25`,[t.booking_id]);
+  await c.query('COMMIT');res.json({legs:q.rows,events:events.rows,bookingStatus:t.booking_status,paymentNote:'Phí có thể hoàn chỉ là dự kiến, không tự động chuyển tiền.'});
+ }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+}));
+app.post('/api/bookings/:code/taxi/legs/:leg/customer',auth,handler(async(req,res)=>{
+ const d=z.object({action:z.enum(['self_arrival','ask_cancel','ask_reschedule','cancel_return']),note:z.string().trim().max(500).optional()}).strict().parse(req.body);
+ const c=await pool.connect();try{await c.query('BEGIN');
+  const t=await ensureTaxiLegs(c,req.params.code);
+  if(!t){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy chuyến Taxi.');}
+  if(Number(t.customer_id)!==Number(req.user.id)){await c.query('ROLLBACK');return fail(res,403,'Không thuộc tài khoản này.');}
+  if(t.booking_status==='Đã hủy'||(t.booking_status==='Hoàn tất'&&!(req.params.leg==='return'&&['ask_cancel','cancel_return'].includes(d.action)))){await c.query('ROLLBACK');return fail(res,409,'Lịch đã đóng.');}
+  const q=await c.query('SELECT * FROM pet_taxi_legs WHERE booking_id=$1 AND leg=$2 FOR UPDATE',[t.booking_id,req.params.leg]);
+  if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Chiều Taxi không tồn tại.');}
+  const leg=q.rows[0];let state=leg.state,plan=leg.customer_plan,refund=Number(leg.refund_due),action=d.action;
+  if(action==='self_arrival'){
+   if(leg.leg!=='pickup'||!['requested','confirmed'].includes(state)){await c.query('ROLLBACK');return fail(res,409,'Chỉ được miễn phí chiều đón trước khi xe xuất phát.');}
+   state='customer_self';plan='self_arrival';refund=Number(leg.fee);
+  }else if(action==='cancel_return'){
+   if(leg.leg!=='return'||!['requested','confirmed'].includes(state)){await c.query('ROLLBACK');return fail(res,409,'Chỉ được hủy chiều về trước khi xe xuất phát.');}
+   state='cancelled';refund=Number(leg.fee);
+  }else{
+   if(!(action==='ask_cancel'&&state==='en_route')&&!['no_show','arrived','contacting','under_review','provider_fault'].includes(state)){await c.query('ROLLBACK');return fail(res,409,'Chưa có sự cố Taxi để gửi phương án.');}
+   if(action==='ask_cancel'&&state==='en_route'&&plan==='ask_cancel'){await c.query('ROLLBACK');return fail(res,409,'Yêu cầu hủy Taxi này đã được gửi, đang chờ Admin xác minh.');}
+   plan=action==='ask_cancel'?'ask_cancel':'ask_reschedule';
+   // Customers must use the separate booking cancellation / reschedule workflow.
+  }
+  await c.query('UPDATE pet_taxi_legs SET state=$2,customer_plan=$3,refund_due=$4,issue_note=COALESCE($5,issue_note),updated_by=$6,updated_at=now() WHERE id=$1',[leg.id,state,plan,refund,d.note||null,req.user.id]);
+  await c.query('INSERT INTO pet_taxi_leg_events(taxi_leg_id,actor_id,action,previous_state,next_state,note) VALUES($1,$2,$3,$4,$5,$6)',[leg.id,req.user.id,action,leg.state,state,d.note||null]);
+  await notify(c,t.customer_id,'Cập nhật Pet Taxi · '+req.params.code,action==='ask_cancel'&&leg.state==='en_route'?'Đã gửi yêu cầu hủy sau khi xe xuất phát. Admin sẽ xác minh pet chưa được đón; mức hoàn dự kiến 50% phí chiều Taxi nếu đủ điều kiện. Chưa hủy chuyến/chưa hoàn tiền.':action==='self_arrival'?'Đã ghi nhận khách tự đưa thú cưng đến, chiều đón không sử dụng. Lịch chăm sóc vẫn giữ nguyên.':action==='cancel_return'?'Đã hủy chiều về trước khi xe xuất phát.':'Đã ghi nhận lựa chọn của khách. Vui lòng gửi yêu cầu đổi/hủy lịch ở mục tương ứng nếu muốn thay đổi lịch.',req.params.code);
+  await c.query('COMMIT');res.json({ok:true,state,refundDue:refund});
+ }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+}));
+app.post('/api/admin/bookings/:code/taxi/legs/:leg/event',auth,admin,handler(async(req,res)=>{
+ const d=z.object({action:z.enum(['confirm','depart','complete','no_show','provider_fault','cancel','review','cancel_customer_departed']),scheduledAt:z.string().datetime({offset:true}).optional(),verifiedAbsent:z.boolean().optional(),verifiedNotPicked:z.boolean().optional(),note:z.string().trim().max(500).optional()}).strict().parse(req.body);
+ const c=await pool.connect();try{await c.query('BEGIN');
+  const t=await ensureTaxiLegs(c,req.params.code);
+  if(!t){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy chuyến Taxi.');}
+  if(t.booking_status==='Đã hủy'){await c.query('ROLLBACK');return fail(res,409,'Lịch dịch vụ đã hủy.');}
+  const q=await c.query('SELECT * FROM pet_taxi_legs WHERE booking_id=$1 AND leg=$2 FOR UPDATE',[t.booking_id,req.params.leg]);
+  if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Chiều Taxi không tồn tại.');}
+  const row=q.rows[0];
+  if(row.leg==='return'&&!['Đang thực hiện','Hoàn tất'].includes(t.booking_status)&&!['cancel','confirm'].includes(d.action)){
+   await c.query('ROLLBACK');return fail(res,409,'Chiều về chỉ điều phối sau khi dịch vụ đã bắt đầu.');
+  }
+  if(row.leg==='pickup'&&!['Đã xác nhận','Đang thực hiện'].includes(t.booking_status)){
+   await c.query('ROLLBACK');return fail(res,409,'Duyệt lịch chăm sóc trước khi xử lý Taxi chiều đón.');
+  }
+  if(row.leg==='return'&&['depart','complete'].includes(d.action)){
+   const careDone=await c.query("SELECT 1 FROM service_events WHERE booking_id=$1 AND event_type='check_out' LIMIT 1",[t.booking_id]);
+   if(!careDone.rowCount||(d.action==='depart'&&!canDepartReturnTaxi({careCompleted:true,returnState:row.state}))){await c.query('ROLLBACK');return fail(res,409,'Cần hoàn tất chăm sóc và xác nhận chuyến trước khi Taxi chiều về xuất phát hoặc bàn giao.');}
+  }
+  const issue=taxiLegTransitionIssue(row,d.action);
+  if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
+  // Confirmation needs no second customer-selected date/time; use appointment as reference.
+
+  if(d.action==='no_show'&&d.verifiedAbsent!==true){await c.query('ROLLBACK');return fail(res,422,'Admin phải xác nhận đã kiểm tra xe đến đúng điểm đón, liên hệ khách và khách vắng mặt.');}
+  if(d.action==='no_show'){const arrived=await c.query("SELECT 1 FROM service_events WHERE booking_id=$1 AND event_type='pet_arrived' LIMIT 1",[t.booking_id]);if(arrived.rowCount){await c.query('ROLLBACK');return fail(res,409,'Thú cưng đã check-in; không thể ghi nhận không gặp khách.');}}
+  if(d.action==='cancel_customer_departed'&&(row.customer_plan!=='ask_cancel'||d.verifiedNotPicked!==true)){await c.query('ROLLBACK');return fail(res,409,'Chỉ hủy sau xuất phát khi khách đã gửi yêu cầu và Admin xác minh pet chưa được đón.');}
+  if(['provider_fault','review','no_show','cancel_customer_departed'].includes(d.action)&&(!d.note||d.note.length<8)){await c.query('ROLLBACK');return fail(res,422,'Cần ghi lý do ít nhất 8 ký tự.');}
+  const next={confirm:'confirmed',depart:'en_route',complete:'completed',no_show:'no_show',provider_fault:'provider_fault',cancel:'cancelled',review:'under_review',cancel_customer_departed:'cancelled'}[d.action];
+  let due=Number(row.refund_due);
+  if(d.action==='provider_fault')due=Number(row.fee);
+  if(d.action==='cancel')due=Number(row.fee); // Only before vehicle departure.
+  if(d.action==='cancel_customer_departed')due=taxiCustomerCancellationRefund(row.fee); // Client-caused cancellation, pre-pickup.
+  // no_show: only pickup fee is retained after documented, verified absence.
+  if(d.action==='no_show')due=0;
+  await c.query(`UPDATE pet_taxi_legs SET state=$2,scheduled_at=CASE WHEN $3='confirm' THEN COALESCE($4::timestamptz,(SELECT (b.booking_date::text || ' ' || b.slot::text)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh' FROM bookings b WHERE b.id=pet_taxi_legs.booking_id)) ELSE scheduled_at END,
+   departed_at=CASE WHEN $3='depart' THEN now() ELSE departed_at END,
+   arrived_at=CASE WHEN $3='no_show' THEN now() ELSE arrived_at END,
+   arrived_correctly=CASE WHEN $3='no_show' THEN $5 ELSE arrived_correctly END,
+   refund_due=$6,issue_note=COALESCE($7,issue_note),updated_by=$8,updated_at=now() WHERE id=$1`,
+   [row.id,next,d.action,d.scheduledAt||null,d.action==='no_show'?true:null,due,d.note||null,req.user.id]);
+  await c.query('INSERT INTO pet_taxi_leg_events(taxi_leg_id,actor_id,action,previous_state,next_state,note) VALUES($1,$2,$3,$4,$5,$6)',[row.id,req.user.id,d.action,row.state,next,d.note||null]);
+  // Preserve legacy handoff fields so prior care workflow remains usable.
+  if(d.action==='complete'){
+   if(row.leg==='return'){
+    const handoff=await c.query("INSERT INTO service_events(booking_id,event_type,note,created_by) VALUES($1,'pet_handed_over',$2,$3) ON CONFLICT DO NOTHING",[t.booking_id,'Pet Taxi chiều về đã bàn giao pet cho khách',req.user.id]);
+    await c.query("UPDATE bookings SET status='Hoàn tất' WHERE id=$1 AND status='Đang thực hiện'",[t.booking_id]);
+   }
+   if(row.leg==='pickup')await c.query("UPDATE pet_taxi_requests SET status='completed',updated_by=$2,updated_at=now() WHERE id=$1",[t.id,req.user.id]);
+   else if(t.direction==='return')await c.query("UPDATE pet_taxi_requests SET status='completed',updated_by=$2,updated_at=now() WHERE id=$1",[t.id,req.user.id]);
+   else await c.query('UPDATE pet_taxi_requests SET return_completed_at=now(),updated_by=$2,updated_at=now() WHERE id=$1',[t.id,req.user.id]);
+  }
+  if(d.action==='confirm'&&t.direction!=='round_trip')await c.query("UPDATE pet_taxi_requests SET status='confirmed',updated_by=$2,updated_at=now() WHERE id=$1 AND status='requested'",[t.id,req.user.id]);
+  await notify(c,t.customer_id,'Trạng thái Pet Taxi · '+req.params.code,d.action==='cancel_customer_departed'?'Đã xác nhận hủy Taxi theo yêu cầu sau khi xe xuất phát, trước khi đón pet. Phí hoàn dự kiến '+due.toLocaleString('vi-VN')+'đ (50% chiều Taxi); chờ đối soát và duyệt, chưa hoàn tiền.':(row.leg==='pickup'?'Chiều đón':'Chiều về')+': '+next+'. Lịch dịch vụ không tự hủy khi Taxi có sự cố.',req.params.code);
+  await c.query('COMMIT');res.json({ok:true,state:next,refundDue:due});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }));
 // Taxi is a request, not an automatically confirmed vehicle booking.
 app.patch('/api/admin/bookings/:code/taxi',auth,admin,handler(async(req,res)=>{
- const {status}=z.object({status:z.enum(['confirmed','completed'])}).parse(req.body);
+ return fail(res,409,'Vui lòng sử dụng Quản lý Taxi theo từng chiều để có đủ lịch sử và kiểm tra sự cố.');
+ const {status}=z.object({status:z.enum(['confirmed','completed','return_completed'])}).parse(req.body);
  const c=await pool.connect();try{await c.query('BEGIN');
-  const q=await c.query('SELECT tx.id,tx.status,b.customer_id,b.status AS booking_status,b.booking_date,b.slot FROM pet_taxi_requests tx JOIN bookings b ON b.id=tx.booking_id WHERE b.code=$1 FOR UPDATE OF tx',[req.params.code]);
+  const q=await c.query('SELECT tx.id,tx.status,tx.direction,tx.return_completed_at,b.customer_id,b.status AS booking_status,b.booking_date,b.slot FROM pet_taxi_requests tx JOIN bookings b ON b.id=tx.booking_id WHERE b.code=$1 FOR UPDATE OF tx',[req.params.code]);
   if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Lịch không có đăng ký Pet Taxi.');}
   const row=q.rows[0];
   if(row.booking_status==='Đã hủy'){await c.query('ROLLBACK');return fail(res,409,'Lịch đã hủy.');}
-  if(!['Đã xác nhận','Đang thực hiện'].includes(row.booking_status)){await c.query('ROLLBACK');return fail(res,409,'Phải duyệt lịch dịch vụ trước khi điều phối Pet Taxi.');}
+  if(!['Đã xác nhận','Đang thực hiện','Hoàn tất'].includes(row.booking_status)){await c.query('ROLLBACK');return fail(res,409,'Phải duyệt lịch dịch vụ trước khi điều phối Pet Taxi.');}
   // V6.71: Admin may confirm completed handoff after booking approval.
   // No automatic clock-based status transitions; the admin records an actual event.
   if(status==='confirmed'&&row.status!=='requested'){await c.query('ROLLBACK');return fail(res,409,'Chuyến Taxi đã được điều phối trước đó.');}
-  if(status==='completed'&&!['requested','confirmed'].includes(row.status)){await c.query('ROLLBACK');return fail(res,409,'Taxi đã hoàn tất hoặc không thể cập nhật chuyến này.');}
-  await c.query('UPDATE pet_taxi_requests SET status=$1,updated_by=$2,updated_at=now() WHERE id=$3',[status,req.user.id,row.id]);
-  await notify(c,row.customer_id,'Cập nhật Pet Taxi '+req.params.code,status==='confirmed'?'PetDay đã nhận điều phối chuyến đón. Nhân viên sẽ liên hệ xác nhận thời gian.':'Pet Taxi đã đón và bàn giao thú cưng tại cơ sở; nhân viên có thể tiếp nhận và bắt đầu dịch vụ.',req.params.code);
+  if(status==='completed'&&!['requested','confirmed'].includes(row.status)){await c.query('ROLLBACK');return fail(res,409,'Chiều Taxi này đã hoàn tất hoặc không thể cập nhật.');}
+  if(status==='completed'&&row.direction==='return'&&row.booking_status!=='Đang thực hiện'){await c.query('ROLLBACK');return fail(res,409,'Chỉ xác nhận chiều đưa về sau khi dịch vụ đã bắt đầu.');}
+  if(status==='return_completed'&&row.booking_status!=='Đang thực hiện'){await c.query('ROLLBACK');return fail(res,409,'Chỉ xác nhận chiều về sau khi dịch vụ đã bắt đầu.');}
+  if(status==='return_completed'&&row.direction!=='round_trip'){await c.query('ROLLBACK');return fail(res,409,'Chỉ dùng thao tác này cho Pet Taxi hai chiều.');}
+  if(status==='return_completed'&&(row.status!=='completed'||row.return_completed_at)){await c.query('ROLLBACK');return fail(res,409,'Cần hoàn tất chiều đón trước và chưa từng xác nhận chiều về.');}
+  if(status==='return_completed'){
+   await c.query('UPDATE pet_taxi_requests SET return_completed_at=now(),updated_by=$2,updated_at=now() WHERE id=$1',[row.id,req.user.id]);
+  }else{
+   await c.query('UPDATE pet_taxi_requests SET status=$1,updated_by=$2,updated_at=now() WHERE id=$3',[status,req.user.id,row.id]);
+  }
+  const title=status==='return_completed'?'Đã bàn giao thú cưng tại địa chỉ về':status==='confirmed'?'Đã tiếp nhận yêu cầu điều phối':row.direction==='return'?'Đã đưa thú cưng về và bàn giao':'Đã đón thú cưng đến cơ sở';
+  await notify(c,row.customer_id,'Cập nhật Pet Taxi '+req.params.code,title,req.params.code);
   await c.query('COMMIT');res.json({status});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }));
@@ -840,24 +1166,74 @@ async function autoAssignConfirmed(c, booking, adminId){
  await notify(c,booking.customer_id,'Nhân viên phụ trách lịch '+booking.code,'PetDay đã phân công '+staff.full_name+' phụ trách lịch chăm sóc.',booking.code);
  return staff.full_name;
 }
-app.patch('/api/bookings/:code/status',auth,admin,handler(async(req,res)=>{const {status}=z.object({status:z.enum(['Đã xác nhận','Đang thực hiện','Hoàn tất','Đã hủy'])}).parse(req.body);const c=await pool.connect();try{await c.query('BEGIN');const r=await c.query('SELECT * FROM bookings WHERE code=$1 FOR UPDATE',[req.params.code]);if(!r.rows.length){await c.query('ROLLBACK');return fail(res,404,'Không thấy lịch.');}if(!transitions[r.rows[0].status]?.includes(status)){await c.query('ROLLBACK');return fail(res,409,'Chuyển trạng thái không hợp lệ.');}
+app.patch('/api/bookings/:code/status',auth,admin,handler(async(req,res)=>{const d=z.object({
+ status:z.enum(['Đã xác nhận','Đang thực hiện','Hoàn tất','Đã hủy']),
+ cancellationOrigin:z.enum(['customer_assisted','provider_unavailable']).optional(),
+ cancellationReason:z.string().trim().min(10).max(800).optional(),
+ exceptionRefundAmount:z.number().int().nonnegative().optional()
+}).strict().parse(req.body);const {status}=d;
+if(status==='Đã hủy'&&(!d.cancellationOrigin||!d.cancellationReason))return fail(res,422,'Admin phải chọn nguyên nhân hủy và ghi rõ lý do (ít nhất 10 ký tự).');
+if(status!=='Đã hủy'&&(d.cancellationOrigin||d.cancellationReason||d.exceptionRefundAmount!==undefined))return fail(res,422,'Thông tin hủy chỉ được gửi khi hủy lịch.');
+if(d.exceptionRefundAmount!==undefined&&d.cancellationOrigin!=='customer_assisted')return fail(res,422,'Ngoại lệ hoàn tiền chỉ được xét khi hủy hỗ trợ khách sát giờ.');const c=await pool.connect();try{await c.query('BEGIN');const r=await c.query('SELECT * FROM bookings WHERE code=$1 FOR UPDATE',[req.params.code]);if(!r.rows.length){await c.query('ROLLBACK');return fail(res,404,'Không thấy lịch.');}if(!transitions[r.rows[0].status]?.includes(status)){await c.query('ROLLBACK');return fail(res,409,'Chuyển trạng thái không hợp lệ.');}
 if(status==='Đã xác nhận'&&r.rows[0].payment_method==='bank_transfer'&&r.rows[0].payment_status!=='Đã thanh toán'){await c.query('ROLLBACK');return fail(res,409,'Lịch chuyển khoản phải được Admin xác nhận thanh toán trước khi duyệt lịch.');}
 if(status==='Đã xác nhận'){const cr=await c.query("SELECT 1 FROM booking_cancellation_requests WHERE booking_id=$1 AND status='pending'",[r.rows[0].id]);if(cr.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đang có yêu cầu hủy chờ xử lý.');}// Pet Taxi is an independent workflow: pending dispatch does not block booking approval.
 }
 if(status==='Đang thực hiện'||status==='Hoàn tất'){await c.query('ROLLBACK');return fail(res,409,'Hãy sử dụng nhật ký tiến trình (check-in, chăm sóc, bàn giao) để cập nhật trạng thái.');}
 if(status==='Đã hủy'){
- await releaseStaff(c,r.rows[0].id,req.user.id,'Quản trị hủy lịch');
- if(r.rows[0].payment_status==='Đã thanh toán'){
-  await c.query('INSERT INTO refund_requests(booking_id,customer_id,amount,reason) VALUES($1,$2,$3,$4) ON CONFLICT (booking_id) DO NOTHING',[r.rows[0].id,r.rows[0].customer_id,r.rows[0].total,'Admin đã hủy lịch chưa bắt đầu; hoàn 100% khoản đã thu.']);
-  await notify(c,r.rows[0].customer_id,'Hoàn tiền lịch '+req.params.code,'Lịch đã hủy. Hồ sơ hoàn 100% đang chờ Admin xử lý, chưa phải tiền đã chuyển về.',req.params.code);
+ const booking=r.rows[0];
+ const started=await c.query('SELECT 1 FROM service_events WHERE booking_id=$1 LIMIT 1',[booking.id]);
+ if(started.rowCount){await c.query('ROLLBACK');return fail(res,409,'Dịch vụ đã bắt đầu; phải xử lý sự cố qua quy trình riêng, không thể hủy thông thường.');}
+ const pending=await c.query("SELECT 1 FROM booking_cancellation_requests WHERE booking_id=$1 AND status='pending'",[booking.id]);
+ if(pending.rowCount){await c.query('ROLLBACK');return fail(res,409,'Đã có yêu cầu hủy của khách chờ duyệt; hãy xử lý trong mục Duyệt yêu cầu hủy lịch.');}
+ const dateInfo=await c.query("SELECT to_char(booking_date,'YYYY-MM-DD') AS date FROM bookings WHERE id=$1",[booking.id]);
+ const requestedAt=new Date();
+ const terms=adminCancellationTerms({origin:d.cancellationOrigin,date:dateInfo.rows[0].date,slot:booking.slot,at:requestedAt,total:serviceRefundBase(booking.total,booking.line_items),paid:booking.payment_status==='Đã thanh toán',exceptionRefundAmount:d.exceptionRefundAmount});
+ if(terms.issue){await c.query('ROLLBACK');return fail(res,409,terms.issue);}
+ const policy=terms.policy;
+ if(d.exceptionRefundAmount!==undefined&&d.cancellationReason.length<15){await c.query('ROLLBACK');return fail(res,422,'Ghi rõ lý do ngoại lệ hoàn tiền (ít nhất 15 ký tự).');}
+ // Record customer-assisted cancellation in the existing cancellation ledger.
+ // Subsequent refund checks consult this approved request and preserve the 80%/0% policy.
+ if(d.cancellationOrigin==='customer_assisted'){
+  await c.query(`INSERT INTO booking_cancellation_requests
+    (booking_id,customer_id,reason,status,admin_note,resolved_by,resolved_at)
+    VALUES($1,$2,$3,'approved',$4,$5,now())`,
+    [booking.id,booking.customer_id,'[Admin hỗ trợ theo yêu cầu khách] '+d.cancellationReason,
+    'Admin hủy hộ khách theo chính sách '+policy.label+'. '+d.cancellationReason,req.user.id]);
  }
+ await releaseStaff(c,booking.id,req.user.id,d.cancellationOrigin==='provider_unavailable'?'PetDay không thể phục vụ: '+d.cancellationReason:'Admin hủy hộ khách: '+d.cancellationReason);
+ await closeUnusedTaxiLegs(c,booking.id,req.user.id,'Lịch chăm sóc đã hủy; các chiều Taxi chưa xuất phát đóng và chờ đối soát.');
+ await c.query("UPDATE booking_reschedule_requests SET status='rejected',resolved_at=now() WHERE booking_id=$1 AND status='pending'",[booking.id]);
+ const paid=booking.payment_status==='Đã thanh toán';
+ const amount=terms.refundAmount;
+ if(paid){
+  if(!Number.isSafeInteger(Number(booking.total))||Number(booking.total)<=0){await c.query('ROLLBACK');return fail(res,409,'Chưa đối soát được số tiền đã thu.');}
+  if(amount>0){
+   await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason)
+      VALUES($1,$2,$3,$4) ON CONFLICT (booking_id) DO NOTHING`,
+     [booking.id,booking.customer_id,amount,
+      (d.cancellationOrigin==='provider_unavailable'?'PetDay chủ động hủy do không thể phục vụ; hoàn 100%. ':'Admin hủy hộ khách theo '+policy.label+'. ')+
+      (d.exceptionRefundAmount!==undefined?'Hoàn ngoại lệ sát giờ: '+amount+'đ. ':'')+d.cancellationReason]);
+  }
+ }
+ await notify(c,booking.customer_id,'Thông báo hủy lịch '+booking.code,
+  (d.cancellationOrigin==='provider_unavailable'?'PetDay không thể cung cấp dịch vụ. ':'Admin đã xử lý hủy theo yêu cầu của bạn. ')+
+  'Lý do: '+d.cancellationReason+'. '+(paid?(amount>0?'Dự kiến hoàn '+amount.toLocaleString('vi-VN')+'đ; chờ duyệt và thực hiện hoàn riêng.':'Không phát sinh hoàn tiền theo chính sách.'):'Chưa ghi nhận thanh toán; không phát sinh hoàn tiền.'),booking.code);
 }
-const done=await c.query('UPDATE bookings SET status=$1 WHERE code=$2 RETURNING *',[status,req.params.code]);const assignedStaff=status==='Đã xác nhận'?await autoAssignConfirmed(c,done.rows[0],req.user.id):null;await notify(c,r.rows[0].customer_id,'Cập nhật lịch '+req.params.code,'Trạng thái dịch vụ: '+status,req.params.code);await c.query('COMMIT');res.json({...done.rows[0],assignedStaff:assignedStaff||null,assignmentPending:status==='Đã xác nhận'&&!assignedStaff});}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}));
+
+const done=await c.query('UPDATE bookings SET status=$1 WHERE code=$2 RETURNING *',[status,req.params.code]);const assignedStaff=null; /* V6.104: Admin directly handles care; assignment is optional. */await notify(c,r.rows[0].customer_id,'Cập nhật lịch '+req.params.code,'Trạng thái dịch vụ: '+status,req.params.code);await c.query('COMMIT');res.json({...done.rows[0],assignedStaff:assignedStaff||null,assignmentPending:false});}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}));
 app.patch('/api/admin/bookings/:code/payment',auth,admin,handler(async(req,res)=>{
  const d=z.object({paymentStatus:z.enum(['Chưa thanh toán','Đã thanh toán']),reference:z.string().trim().max(120).default(''),note:z.string().trim().max(500).default('')}).parse(req.body);
  const c=await pool.connect();try{await c.query('BEGIN');
   const old=await c.query('SELECT * FROM bookings WHERE code=$1 FOR UPDATE',[req.params.code]);if(!old.rowCount||old.rows[0].status==='Đã hủy'){await c.query('ROLLBACK');return fail(res,409,'Không thể xác nhận lịch đã hủy hoặc không tồn tại.');}
   const b=old.rows[0];if(b.payment_status===d.paymentStatus){await c.query('ROLLBACK');return fail(res,409,'Trạng thái thanh toán chưa thay đổi.');}
+  if(d.paymentStatus==='Đã thanh toán'&&b.payment_method==='bank_transfer'){
+   // A reference typed by an Admin is not a substitute for a customer payment notice.
+   // The customer must have reported the QR session BEFORE Admin can reconcile it.
+   const notice=await c.query(`SELECT 1 FROM bank_transfer_notices n
+     JOIN payment_qr_sessions qr ON qr.kind='booking' AND qr.code=$2 AND qr.customer_id=$3
+     WHERE n.booking_id=$1 AND qr.reported_at IS NOT NULL LIMIT 1`,[b.id,b.code,b.customer_id]);
+   if(!notice.rowCount){await c.query('ROLLBACK');return fail(res,409,'Khách chưa bấm “Tôi đã chuyển khoản” trong phiên QR hợp lệ. Không thể xác nhận chuyển khoản.');}
+  }
   if(d.paymentStatus==='Đã thanh toán'&&b.payment_method==='bank_transfer'&&!d.reference){await c.query('ROLLBACK');return fail(res,422,'Chuyển khoản phải nhập mã giao dịch ngân hàng đã đối soát.');}
   if(d.paymentStatus==='Đã thanh toán'&&b.payment_method==='bank_transfer'){
    // Serialize settlement events carrying the same real bank transaction reference.
@@ -866,7 +1242,13 @@ app.patch('/api/admin/bookings/:code/payment',auth,admin,handler(async(req,res)=
    if(duplicate.rowCount){await c.query('ROLLBACK');return fail(res,409,'Mã giao dịch ngân hàng đã được dùng để đối soát một lịch khác. Vui lòng kiểm tra sao kê.');}
   }
   if(d.paymentStatus==='Chưa thanh toán'&&!d.note){await c.query('ROLLBACK');return fail(res,422,'Cần ghi lý do điều chỉnh thanh toán.');}
-  if(d.paymentStatus==='Chưa thanh toán'){const refund=await c.query('SELECT 1 FROM refund_requests WHERE booking_id=$1 LIMIT 1',[b.id]);if(refund.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã có hồ sơ hoàn tiền; không được đảo trạng thái thanh toán. Vui lòng xử lý qua sổ hoàn tiền.');}}
+  if(d.paymentStatus==='Chưa thanh toán'){const refund=await c.query('SELECT 1 FROM refund_requests WHERE booking_id=$1 LIMIT 1',[b.id]);if(refund.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã có hồ sơ hoàn tiền; không được đảo trạng thái thanh toán. Vui lòng xử lý qua sổ hoàn tiền.');}const taxiRefund=await c.query('SELECT 1 FROM taxi_refund_requests WHERE booking_id=$1 LIMIT 1',[b.id]);if(taxiRefund.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã có hồ sơ hoàn Pet Taxi; không thể đảo trạng thái thanh toán.');}}
+  if(d.paymentStatus==='Đã thanh toán'){
+   const recorded=await getBookingSettlement(c,b.id);
+   if(recorded.collected>0){await c.query('ROLLBACK');return fail(res,409,'Lịch đã ghi nhận thu tiền theo từng khoản. Vui lòng xử lý tại sổ thu.');}
+   if(recorded.charge===0){await c.query('ROLLBACK');return fail(res,409,'Không còn phí phải thu.');}
+   await c.query('INSERT INTO booking_payment_receipts(booking_id,amount,method,reference,note,recorded_by) VALUES($1,$2,$3,$4,$5,$6)',[b.id,recorded.charge,b.payment_method,d.reference||null,d.note||'Thu đủ theo phí sau điều chỉnh',req.user.id]);
+  }
   const q=await c.query('UPDATE bookings SET payment_status=$1 WHERE id=$2 RETURNING code,payment_status',[d.paymentStatus,b.id]);
   await c.query('INSERT INTO payment_events(booking_id,admin_id,previous_status,new_status,reference,note) VALUES($1,$2,$3,$4,$5,$6)',[b.id,req.user.id,b.payment_status,d.paymentStatus,d.reference||null,d.note||null]);
   await notify(c,b.customer_id,'Thanh toán lịch '+b.code,'Trạng thái thanh toán: '+d.paymentStatus,b.code);
@@ -882,20 +1264,27 @@ app.get('/api/admin/payments/audit',auth,admin,handler(async(req,res)=>{
 // an external refund and recorded its reference or cash receipt.
 const refundReason=z.string().trim().min(10).max(1000);
 app.get('/api/my/refunds',auth,handler(async(req,res)=>{
- const r=await pool.query(`SELECT r.id,b.code,b.service,b.total,r.amount,r.reason,r.status,r.admin_note AS "adminNote",r.refund_reference AS "refundReference",r.created_at AS "createdAt",r.updated_at AS "updatedAt",r.completed_at AS "completedAt",to_char(b.booking_date,'YYYY-MM-DD') AS "appointmentDate",b.slot AS "appointmentSlot",b.branch AS "branch"
+ const r=await pool.query(`SELECT r.id,b.code,b.service,b.total,b.line_items AS "lineItems",r.amount,r.reason,r.status,r.admin_note AS "adminNote",r.refund_reference AS "refundReference",r.created_at AS "createdAt",r.updated_at AS "updatedAt",r.completed_at AS "completedAt",to_char(b.booking_date,'YYYY-MM-DD') AS "appointmentDate",b.slot AS "appointmentSlot",b.branch AS "branch"
  FROM refund_requests r JOIN bookings b ON b.id=r.booking_id WHERE r.customer_id=$1 ORDER BY r.created_at DESC LIMIT 100`,[req.user.id]);res.json(r.rows);
 }));
 app.post('/api/bookings/:code/refund-request',auth,handler(async(req,res)=>{
  const d=z.object({reason:refundReason}).strict().parse(req.body);
  const c=await pool.connect();try{await c.query('BEGIN');
- const q=await c.query('SELECT id,customer_id,total,payment_status,status FROM bookings WHERE code=$1 AND customer_id=$2 FOR UPDATE',[req.params.code,req.user.id]);
+ const q=await c.query("SELECT id,customer_id,total,payment_status,status,to_char(booking_date,'YYYY-MM-DD') AS date,slot FROM bookings WHERE code=$1 AND customer_id=$2 FOR UPDATE",[req.params.code,req.user.id]);
  if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch hẹn thuộc tài khoản.');}
  const b=q.rows[0];
  const prev=await c.query('SELECT id FROM refund_requests WHERE booking_id=$1',[b.id]);
  const issue=refundEligibility({paymentStatus:b.payment_status,status:b.status,total:b.total,existing:Boolean(prev.rowCount)});
  if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
+ // A completed customer-cancellation decision fixes the payable amount. Never
+ // let a separate customer refund request bypass the 80% or 0% policy.
+ const cancel=await c.query("SELECT created_at FROM booking_cancellation_requests WHERE booking_id=$1 AND status='approved' ORDER BY resolved_at DESC,id DESC LIMIT 1",[b.id]);
+ const policy=cancel.rowCount?cancellationPolicy({date:b.date,slot:b.slot,requestedAt:cancel.rows[0].created_at,total:serviceRefundBase(b.total,b.line_items)}):null;
+ if(policy&&policy.refundAmount<=0){await c.query('ROLLBACK');return fail(res,409,'Lịch hủy sát giờ không có khoản hoàn mặc định. Vui lòng liên hệ Admin để xem xét ngoại lệ.');}
+ const amount=policy?policy.refundAmount:Number(b.total);
+ const reason=policy?'Hoàn theo chính sách '+policy.label+'. '+d.reason:d.reason;
  const r=await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason) VALUES($1,$2,$3,$4)
- RETURNING id,status,amount`,[b.id,req.user.id,b.total,d.reason]);
+ RETURNING id,status,amount`,[b.id,req.user.id,amount,reason]);
  await notify(c,req.user.id,'Đã ghi nhận yêu cầu hoàn tiền · '+req.params.code,'PetDay sẽ kiểm tra yêu cầu. Gửi yêu cầu không đồng nghĩa được chấp thuận hoặc tiền đã hoàn.',req.params.code);
  await c.query('COMMIT');res.status(201).json(r.rows[0]);
  }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Lịch đã có yêu cầu hoàn tiền.');throw e;}finally{c.release();}
@@ -907,31 +1296,41 @@ app.post('/api/admin/refunds/reconcile-missing',auth,admin,handler(async(req,res
   await c.query('BEGIN');
   // Serialize concurrent reconciliations without modifying already existing refund cases.
   await c.query('SELECT pg_advisory_xact_lock(6922026,1)');
-  const inserted=await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason)
-    SELECT b.id,b.customer_id,b.total,
-      CASE WHEN ns.booking_id IS NOT NULL THEN
-        'Khôi phục hồ sơ: khách không đến, chưa sử dụng dịch vụ; hoàn 100% khoản đã thu.'
-      ELSE 'Khôi phục hồ sơ: Admin đã hủy lịch chưa thực hiện dịch vụ; hoàn 100% khoản đã thu.' END
+  const candidates=await c.query(`SELECT b.id,b.code,b.customer_id,b.total,b.line_items,
+     to_char(b.booking_date,'YYYY-MM-DD') AS date,b.slot,
+     ns.booking_id IS NOT NULL AS no_show,
+     (SELECT cr.created_at FROM booking_cancellation_requests cr
+       WHERE cr.booking_id=b.id AND cr.status='approved'
+       ORDER BY cr.resolved_at DESC,cr.id DESC LIMIT 1) AS cancellation_at
     FROM bookings b
     LEFT JOIN booking_no_shows ns ON ns.booking_id=b.id
-    WHERE b.status='Đã hủy'
-      AND b.payment_status='Đã thanh toán'
-      AND b.total>0
-      AND NOT EXISTS (SELECT 1 FROM service_events se WHERE se.booking_id=b.id)
-      AND NOT EXISTS (SELECT 1 FROM care_records cr WHERE cr.booking_id=b.id)
-    ON CONFLICT (booking_id) DO NOTHING
-    RETURNING id,booking_id,customer_id`);
-  for(const r of inserted.rows){
-   const b=await c.query('SELECT code FROM bookings WHERE id=$1',[r.booking_id]);
-   await notify(c,r.customer_id,'Đã bổ sung hồ sơ hoàn tiền · '+b.rows[0].code,
-    'Lịch đã hủy và chưa sử dụng dịch vụ. PetDay đã mở hồ sơ hoàn 100% khoản đã ghi nhận; chờ Admin xử lý, chưa phải tiền đã được chuyển hoàn.',b.rows[0].code);
+    WHERE b.status='Đã hủy' AND b.payment_status='Đã thanh toán' AND b.total>0
+      AND NOT EXISTS(SELECT 1 FROM service_events se WHERE se.booking_id=b.id)
+      AND NOT EXISTS(SELECT 1 FROM care_records cr WHERE cr.booking_id=b.id)
+      AND NOT EXISTS(SELECT 1 FROM refund_requests rr WHERE rr.booking_id=b.id)`);
+  let insertedCount=0;
+  for(const b of candidates.rows){
+   // A no-show is not an Admin/provider cancellation. Never auto-create a full refund.
+   if(b.no_show)continue;
+   const policy=b.cancellation_at?cancellationPolicy({date:b.date,slot:b.slot,requestedAt:b.cancellation_at,total:serviceRefundBase(b.total,b.line_items)}):null;
+   const amount=policy?policy.refundAmount:serviceRefundBase(b.total,b.line_items);
+   if(!Number.isSafeInteger(amount)||amount<=0)continue; // late cancellation: no automatic refund
+   const reason=policy?'Khôi phục hồ sơ hủy theo chính sách '+policy.label+'.':b.no_show?
+    'Khôi phục hồ sơ: khách không đến, chưa sử dụng dịch vụ; hoàn 100% khoản đã thu.':
+    'Khôi phục hồ sơ: Admin đã hủy lịch chưa thực hiện dịch vụ; hoàn 100% khoản đã thu.';
+   const r=await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason)
+     VALUES($1,$2,$3,$4) ON CONFLICT (booking_id) DO NOTHING RETURNING id`,[b.id,b.customer_id,amount,reason]);
+   if(r.rowCount){insertedCount++;
+    await notify(c,b.customer_id,'Đã bổ sung hồ sơ hoàn tiền · '+b.code,
+     'Đã mở hồ sơ hoàn dự kiến '+amount.toLocaleString('vi-VN')+'đ, chờ Admin duyệt; chưa phải tiền đã được chuyển hoàn.',b.code);
+   }
   }
-  await c.query('COMMIT');res.json({ok:true,created:inserted.rowCount,message:inserted.rowCount?'Đã bổ sung '+inserted.rowCount+' hồ sơ hoàn tiền bị thiếu.':'Không có hồ sơ đủ điều kiện bị thiếu.'});
+  await c.query('COMMIT');res.json({ok:true,created:insertedCount,message:insertedCount?'Đã bổ sung '+insertedCount+' hồ sơ hoàn tiền bị thiếu.':'Không có hồ sơ đủ điều kiện bị thiếu.'});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }));
 app.get('/api/admin/refunds',auth,admin,handler(async(req,res)=>{
- const q=await pool.query(`SELECT r.id,b.code,b.service,b.payment_method AS "paymentMethod",b.total,r.amount,r.reason,r.status,r.admin_note AS "adminNote",r.refund_reference AS "refundReference",r.created_at AS "createdAt",r.updated_at AS "updatedAt",r.completed_at AS "completedAt",to_char(b.booking_date,'YYYY-MM-DD') AS "appointmentDate",b.slot AS "appointmentSlot",b.branch AS "branch",b.status AS "bookingStatus",u.full_name AS "customerName"
- FROM refund_requests r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=r.customer_id ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,r.created_at DESC LIMIT 200`);res.json(q.rows);
+ const q=await pool.query(`SELECT r.id,b.code,b.service,b.payment_method AS "paymentMethod",b.total,b.line_items AS "lineItems",r.amount,r.reason,r.status,r.admin_note AS "adminNote",r.refund_reference AS "refundReference",r.created_at AS "createdAt",r.updated_at AS "updatedAt",r.completed_at AS "completedAt",to_char(b.booking_date,'YYYY-MM-DD') AS "appointmentDate",b.slot AS "appointmentSlot",b.branch AS "branch",b.status AS "bookingStatus",u.full_name AS "customerName"
+ FROM refund_requests r JOIN bookings b ON b.id=r.booking_id JOIN users u ON u.id=r.customer_id ORDER BY CASE r.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,r.created_at DESC LIMIT 200`);res.json(q.rows.map(r=>({...r,serviceMaximum:serviceRefundBase(r.total,r.lineItems)})));
 }));
 app.patch('/api/admin/refunds/:id',auth,admin,handler(async(req,res)=>{
  const d=z.discriminatedUnion('decision',[
@@ -946,12 +1345,31 @@ app.patch('/api/admin/refunds/:id',auth,admin,handler(async(req,res)=>{
  const next=d.decision==='approve'?'approved':d.decision==='reject'?'rejected':'completed';
  // V6.91: no service received -> full refund. Keep payment and refund ledgers separate.
  const unservedBooking=serviceNotProvided(r.booking_status);
- const servicePolicyIssue=fullRefundDecisionIssue({mandatory:unservedBooking,decision:d.decision,amount:d.decision==='approve'?d.amount:undefined,total:r.total});
+ // V6.103.5: customer-initiated cancellation has a time-based policy; Admin-
+ // initiated cancellation still follows the legacy full-refund requirement.
+ const approvedCustomerCancel=await c.query("SELECT created_at FROM booking_cancellation_requests WHERE booking_id=$1 AND status='approved' ORDER BY resolved_at DESC,id DESC LIMIT 1",[r.booking_id]);
+ const fromCustomerCancellation=unservedBooking&&approvedCustomerCancel.rowCount>0;
+ if(fromCustomerCancellation&&d.decision==='reject'){await c.query('ROLLBACK');return fail(res,409,'Đã có hồ sơ hoàn tiền theo chính sách hủy được duyệt; không thể từ chối tùy ý.');}
+ if(fromCustomerCancellation&&d.decision==='approve'&&d.amount!==undefined&&d.amount!==Number(r.amount)){await c.query('ROLLBACK');return fail(res,409,'Số tiền hoàn đã chốt khi duyệt hủy; không được tự sửa tại bước duyệt hoàn.');}
+ // Legacy no-show refunds must not be forced to 100%; customer/assisted cancellations
+ // keep the policy amount recorded at cancellation approval, not the gross invoice.
+ const assisted=String(r.reason||'').includes('Admin hủy hộ khách')||String(r.reason||'').includes('Hủy theo chính sách')||String(r.reason||'').includes('Hoàn theo chính sách');
+ const splitQuery=await c.query('SELECT line_items FROM bookings WHERE id=$1',[r.booking_id]);
+ const serviceMaximum=serviceRefundBase(r.total,splitQuery.rows[0]?.line_items);
+ const mandatoryProvider=unservedBooking&&!fromCustomerCancellation&&!assisted&&serviceMaximum>0;
+ const servicePolicyIssue=fullRefundDecisionIssue({mandatory:mandatoryProvider,decision:d.decision,amount:d.decision==='approve'?d.amount:undefined,total:serviceMaximum});
  if(servicePolicyIssue){await c.query('ROLLBACK');return fail(res,409,servicePolicyIssue);}
  const issue=refundDecisionIssue(r.status,d.decision,r.payment_status==='Đã thanh toán');
  if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
  // An approval may choose a partial refund, never more than the recorded receipt.
- const amount=unservedBooking?Number(r.total):(d.decision==='approve'&&d.amount!==undefined?d.amount:Number(r.amount));
+ const amount=mandatoryProvider?serviceMaximum:(fromCustomerCancellation||assisted)?Number(r.amount):(d.decision==='approve'&&d.amount!==undefined?d.amount:Number(r.amount));
+ if(d.decision==='approve'){
+  const taxi=await c.query("SELECT COALESCE(SUM(amount),0)::bigint AS total FROM taxi_refund_requests WHERE booking_id=$1 AND status IN ('pending','approved','completed')",[r.booking_id]);
+  if(amount>serviceMaximum){await c.query('ROLLBACK');return fail(res,409,'Hoàn dịch vụ vượt phần giá trị chăm sóc đã thu; phí Taxi và sản phẩm phải đối soát riêng.');}
+  if(amount+Number(taxi.rows[0].total)>(await getBookingSettlement(c,r.booking_id)).collected){
+   await c.query('ROLLBACK');return fail(res,409,'Hồ sơ hoàn dịch vụ cộng với hoàn Taxi vượt tiền đã thu. Cần đối soát khoản dịch vụ và Taxi trước khi duyệt.');
+  }
+ }
  const amountIssue=refundAmountIssue(amount,r.total,d.decision==='approve'?d.note:'Đã xử lý');
  if(amountIssue){await c.query('ROLLBACK');return fail(res,422,amountIssue);}
  const updated=await c.query(`UPDATE refund_requests SET status=$1,admin_note=$2,refund_reference=CASE WHEN $1='completed' THEN $3 ELSE refund_reference END,processed_by=$4,updated_at=now(),completed_at=CASE WHEN $1='completed' THEN now() ELSE completed_at END,amount=CASE WHEN $1='approved' THEN $6 ELSE amount END WHERE id=$5 RETURNING id,status,amount`,[next,d.note,d.decision==='complete'?d.reference:null,req.user.id,r.id,amount]);
@@ -964,65 +1382,130 @@ app.patch('/api/admin/refunds/:id',auth,admin,handler(async(req,res)=>{
 // Refunds only reduce net receipts when explicitly marked completed.
 app.get('/api/admin/finance/summary',auth,admin,handler(async(req,res)=>{
  const q=await pool.query(`SELECT
- COALESCE((SELECT SUM(total) FROM bookings WHERE payment_status='Đã thanh toán'),0)::bigint AS "grossReceived",
- COALESCE((SELECT SUM(amount) FROM refund_requests WHERE status='completed'),0)::bigint AS "refunded",
- (SELECT COUNT(*)::int FROM refund_requests WHERE status='pending') AS "pendingRefunds",
- (SELECT COUNT(*)::int FROM refund_requests WHERE status='approved') AS "approvedUnpaid"`);
- const r=q.rows[0];res.json({...r,netReceived:String(BigInt(r.grossReceived)-BigInt(r.refunded)),currency:'VND',basis:'Manual payment confirmations less completed external refunds; cumulative, not a bank statement.'});
+ COALESCE((SELECT SUM(amount) FROM booking_payment_receipts),0)::bigint AS "grossReceived",
+ (COALESCE((SELECT SUM(amount) FROM refund_requests WHERE status='completed'),0)+COALESCE((SELECT SUM(amount) FROM taxi_refund_requests WHERE status='completed'),0))::bigint AS "refunded",
+ ((SELECT COUNT(*) FROM refund_requests WHERE status='pending')+(SELECT COUNT(*) FROM taxi_refund_requests WHERE status='pending'))::int AS "pendingRefunds",
+ ((SELECT COUNT(*) FROM refund_requests WHERE status='approved')+(SELECT COUNT(*) FROM taxi_refund_requests WHERE status='approved'))::int AS "approvedUnpaid"`);
+ const r=q.rows[0];res.json({...r,netReceived:String(BigInt(r.grossReceived)-BigInt(r.refunded)),currency:'VND',basis:'Recorded booking receipts less completed service and taxi refunds; excludes retail accounting; not a bank statement.'});
 }));
 
 // Reschedule request workflow: customer proposes; admin verifies capacity and accepts/rejects.
 app.get('/api/reschedule-requests',auth,handler(async(req,res)=>{
- const where=req.user.role==='admin'?'':'WHERE r.requested_by=$1';
- const q=`SELECT r.id,r.booking_id,r.proposed_date::text AS "proposedDate",r.proposed_slot AS "proposedSlot",r.reason,r.status,r.created_at AS "createdAt",r.resolved_at AS "resolvedAt",b.code AS "bookingCode",b.branch,b.service FROM booking_reschedule_requests r JOIN bookings b ON b.id=r.booking_id ${where} ORDER BY r.created_at DESC LIMIT 150`;
+ if(!['admin','customer'].includes(req.user.role))return fail(res,403,'Không có quyền xem đề xuất đổi lịch.');
+ // Customer sees proposals submitted by PetDay as well as their own requests.
+ const where=req.user.role==='admin'?'':'WHERE b.customer_id=$1';
+ const q=`SELECT r.id,r.booking_id,r.requested_by AS "requestedBy",r.proposed_date::text AS "proposedDate",r.proposed_slot AS "proposedSlot",r.reason,r.status,r.created_at AS "createdAt",r.resolved_at AS "resolvedAt",b.code AS "bookingCode",b.customer_id AS "customerId",to_char(b.booking_date,'YYYY-MM-DD') AS "currentDate",b.slot AS "currentSlot",b.branch,b.service FROM booking_reschedule_requests r JOIN bookings b ON b.id=r.booking_id ${where} ORDER BY r.created_at DESC LIMIT 150`;
  const out=await pool.query(q,req.user.role==='admin'?[]:[req.user.id]);res.json(out.rows);
 }));
+// Customer submits a reschedule request; only Admin may approve it.
+// Keep the original appointment and Taxi directions unchanged until approval.
 app.post('/api/bookings/:code/reschedule',auth,handler(async(req,res)=>{
- const d=z.object({date:z.string(),slot:z.string(),reason:z.string().trim().min(5).max(500)}).parse(req.body);
+ if(req.user.role!=='customer')return fail(res,403,'Chỉ khách hàng được gửi yêu cầu đổi lịch.');
+ const d=z.object({date:z.string(),slot:z.string(),reason:z.string().trim().min(5).max(500)}).strict().parse(req.body);
  const c=await pool.connect();try{await c.query('BEGIN');
- const b=await c.query('SELECT * FROM bookings WHERE code=$1 AND customer_id=$2 FOR UPDATE',[req.params.code,req.user.id]);
- if(!b.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch hẹn của bạn.');}
- const row=b.rows[0];if(!['Đang chờ xác nhận','Đã xác nhận'].includes(row.status)) {await c.query('ROLLBACK');return fail(res,409,'Lịch đã bắt đầu hoặc kết thúc, không thể đổi lịch.');}
- if(!validFutureDate(d.date)||!validSlot(row.service,d.slot)) {await c.query('ROLLBACK');return fail(res,400,'Ngày hoặc khung giờ mới không hợp lệ.');}
- if(row.booking_date.toISOString().slice(0,10)===d.date&&row.slot===d.slot){await c.query('ROLLBACK');return fail(res,400,'Vui lòng chọn thời gian khác lịch hiện tại.');}
- const pending=await c.query("SELECT id FROM booking_reschedule_requests WHERE booking_id=$1 AND status='pending' LIMIT 1",[row.id]);
- if(pending.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã có yêu cầu đổi giờ đang chờ xử lý.');}
- const r=await c.query('INSERT INTO booking_reschedule_requests(booking_id,requested_by,proposed_date,proposed_slot,reason) VALUES($1,$2,$3,$4,$5) RETURNING id,status',[row.id,req.user.id,d.date,d.slot,d.reason]);
- await c.query('COMMIT');res.status(201).json(r.rows[0]);
- }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+  const found=await c.query("SELECT *,to_char(booking_date,'YYYY-MM-DD') AS booking_date_iso FROM bookings WHERE code=$1 FOR UPDATE",[req.params.code]);
+  if(!found.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch hẹn.');}
+  const b=found.rows[0];
+  if(Number(b.customer_id)!==Number(req.user.id)){await c.query('ROLLBACK');return fail(res,403,'Lịch hẹn không thuộc tài khoản.');}
+  if(!['Đang chờ xác nhận','Đã xác nhận'].includes(b.status)){await c.query('ROLLBACK');return fail(res,409,'Chỉ đổi lịch trước khi bắt đầu chăm sóc.');}
+  const startTime=Date.parse(b.booking_date_iso+'T'+b.slot.slice(0,5)+':00+07:00');
+  if(!Number.isFinite(startTime)||startTime-Date.now()<=3*60*60*1000){await c.query('ROLLBACK');return fail(res,409,'Chỉ gửi yêu cầu khi còn hơn 3 giờ trước giờ hẹn.');}
+  if(!validFutureDate(d.date)||!validSlot(b.service,d.slot)||sameAppointmentTime(b.booking_date_iso,b.slot,d.date,d.slot)){
+   await c.query('ROLLBACK');return fail(res,422,'Ngày/giờ mới phải hợp lệ và khác lịch hiện tại.');
+  }
+  const prior=await c.query("SELECT 1 FROM booking_reschedule_requests WHERE booking_id=$1 AND status IN ('pending','approved') LIMIT 1",[b.id]);
+  if(prior.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã có yêu cầu đang chờ hoặc đã sử dụng lượt đổi lịch.');}
+  const legacyTaxi=await c.query("SELECT 1 FROM pet_taxi_requests WHERE booking_id=$1 AND status='completed' LIMIT 1",[b.id]);
+  if(legacyTaxi.rowCount){await c.query('ROLLBACK');return fail(res,409,'Taxi đã hoàn tất một chiều, không thể đổi lịch tự động.');}
+  const activeTaxi=await c.query("SELECT 1 FROM pet_taxi_legs WHERE booking_id=$1 AND state NOT IN ('requested','confirmed') LIMIT 1",[b.id]);
+  if(activeTaxi.rowCount){await c.query('ROLLBACK');return fail(res,409,'Taxi đã xuất phát hoặc đã kết thúc; không thể đổi lịch tự động.');}
+  const inserted=await c.query('INSERT INTO booking_reschedule_requests(booking_id,requested_by,proposed_date,proposed_slot,reason) VALUES($1,$2,$3,$4,$5) RETURNING id,status',[b.id,req.user.id,d.date,d.slot,d.reason]);
+  await notify(c,b.customer_id,'Đã gửi yêu cầu đổi lịch '+b.code,'Yêu cầu đổi sang '+d.date+' lúc '+d.slot+' đang chờ PetDay duyệt. Lịch hiện tại vẫn giữ nguyên.',b.code);
+  await c.query('COMMIT');return res.status(201).json(inserted.rows[0]);
+ }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Lịch đã có yêu cầu đổi lịch đang chờ.');throw e;}finally{c.release();}
 }));
-app.patch('/api/admin/reschedule-requests/:id',auth,admin,handler(async(req,res)=>{
+
+// PetDay may PROPOSE a new time, but only the customer may accept it.
+// Existing table and unique pending index are reused, no migration needed.
+app.post('/api/admin/bookings/:code/reschedule-proposal',auth,admin,handler(async(req,res)=>{
+ const d=z.object({date:z.string(),slot:z.string(),reason:z.string().trim().min(5).max(500)}).strict().parse(req.body);
+ const c=await pool.connect();try{await c.query('BEGIN');
+ const q=await c.query("SELECT *,to_char(booking_date,'YYYY-MM-DD') AS booking_date_iso FROM bookings WHERE code=$1 FOR UPDATE",[req.params.code]);
+ if(!q.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch.');}
+ const b=q.rows[0];
+ if(b.status!=='Đã xác nhận'){await c.query('ROLLBACK');return fail(res,409,'Admin chỉ đề xuất đổi lịch sau khi lịch đã được xác nhận.');}
+ const startTime=new Date(b.booking_date_iso+'T'+b.slot+':00+07:00').getTime();
+ if(!Number.isFinite(startTime)||startTime-Date.now()<=3*3600000){await c.query('ROLLBACK');return fail(res,409,'Quá sát giờ hẹn, cần liên hệ khách để xử lý riêng.');}
+ if(!validFutureDate(d.date)||!validSlot(b.service,d.slot)||sameAppointmentTime(b.booking_date_iso,b.slot,d.date,d.slot)){await c.query('ROLLBACK');return fail(res,422,'Ngày/giờ mới phải hợp lệ và khác lịch hiện tại.');}
+ const existing=await c.query("SELECT 1 FROM booking_reschedule_requests WHERE booking_id=$1 AND status IN ('pending','approved') LIMIT 1",[b.id]);
+ if(existing.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã có yêu cầu đang chờ hoặc đã sử dụng lượt đổi lịch.');}
+ const oldTaxi=await c.query("SELECT 1 FROM pet_taxi_requests WHERE booking_id=$1 AND status='completed' LIMIT 1",[b.id]);
+ if(oldTaxi.rowCount){await c.query('ROLLBACK');return fail(res,409,'Đã hoàn thành chuyến Taxi; không thể đổi giờ tự động.');}
+ const activeTaxi=await c.query("SELECT 1 FROM pet_taxi_legs WHERE booking_id=$1 AND state NOT IN ('requested','confirmed') LIMIT 1",[b.id]);
+ if(activeTaxi.rowCount){await c.query('ROLLBACK');return fail(res,409,'Taxi đã bắt đầu hoặc kết thúc một chiều; không thể đề xuất đổi tự động.');}
+ const result=await c.query('INSERT INTO booking_reschedule_requests(booking_id,requested_by,proposed_date,proposed_slot,reason) VALUES($1,$2,$3,$4,$5) RETURNING id,status',[b.id,req.user.id,d.date,d.slot,d.reason]);
+ await notify(c,b.customer_id,'PetDay đề xuất đổi lịch '+b.code,`PetDay đề xuất chuyển lịch sang ${d.date} lúc ${d.slot}. Vào Lịch hẹn để đồng ý hoặc từ chối. Lịch cũ vẫn giữ nguyên cho đến khi bạn đồng ý.`,b.code);
+ await c.query('COMMIT');res.status(201).json(result.rows[0]);
+ }catch(e){await c.query('ROLLBACK');if(e.code==='23505')return fail(res,409,'Đã có đề xuất đổi lịch đang chờ.');throw e;}finally{c.release();}
+}));
+async function resolveRescheduleRequest(req,res){
  const {decision}=z.object({decision:z.enum(['approved','rejected'])}).parse(req.body);
  const c=await pool.connect();try{await c.query('BEGIN');
- const r=await c.query('SELECT * FROM booking_reschedule_requests WHERE id=$1 FOR UPDATE',[req.params.id]);
+ const r=await c.query("SELECT *, to_char(proposed_date,'YYYY-MM-DD') AS proposed_date_iso FROM booking_reschedule_requests WHERE id=$1 FOR UPDATE",[req.params.id]);
  if(!r.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy yêu cầu.');}
- const request=r.rows[0];if(request.status!=='pending'){await c.query('ROLLBACK');return fail(res,409,'Yêu cầu đã được xử lý.');}
- const b=await c.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE',[request.booking_id]);const booking=b.rows[0];
+ const request=r.rows[0];
+ const bookingOwner=await c.query('SELECT customer_id FROM bookings WHERE id=$1',[request.booking_id]);
+ if(!bookingOwner.rowCount){await c.query('ROLLBACK');return fail(res,404,'Lịch không còn tồn tại.');}
+ const customerId=Number(bookingOwner.rows[0].customer_id);
+ const permissionIssue=rescheduleDecisionIssue({role:req.user.role,userId:req.user.id,customerId,requestedBy:request.requested_by});
+ if(permissionIssue){await c.query('ROLLBACK');return fail(res,403,permissionIssue);}
+ // Cho phép Admin đồng bộ lại yêu cầu ĐÃ DUYỆT khi ngày lưu sai do lỗi chuyển đổi UTC ở phiên bản cũ.
+ const repairApproved=req.user.role==='admin'&&request.status==='approved'&&decision==='approved';
+ if(request.status!=='pending'&&!repairApproved){await c.query('ROLLBACK');return fail(res,409,'Yêu cầu đã được xử lý.');}
+ const b=await c.query("SELECT *, to_char(booking_date,'YYYY-MM-DD') AS booking_date_iso FROM bookings WHERE id=$1 FOR UPDATE",[request.booking_id]);const booking=b.rows[0];
  if(!booking||!['Đang chờ xác nhận','Đã xác nhận'].includes(booking.status)) {await c.query('ROLLBACK');return fail(res,409,'Lịch không còn đủ điều kiện đổi.');}
+ if(sameAppointmentTime(booking.booking_date_iso,booking.slot,request.proposed_date_iso,request.proposed_slot)){await c.query('ROLLBACK');return fail(res,409,repairApproved?'Lịch đã khớp với yêu cầu đổi được duyệt; không cần đồng bộ.':'Ngày và giờ đề nghị trùng lịch hiện tại; không thể duyệt yêu cầu không có thay đổi.');}
  if(decision==='approved'){
-  const newDate=request.proposed_date.toISOString().slice(0,10),newSlot=request.proposed_slot;
+  const oldStart=new Date(booking.booking_date_iso+'T'+booking.slot+':00+07:00').getTime();
+  if(!Number.isFinite(oldStart)||oldStart-Date.now()<=3*60*60*1000){await c.query('ROLLBACK');return fail(res,409,'Lịch đã quá sát giờ phục vụ; không thể duyệt đổi tự động.');}
+  const prior=await c.query("SELECT 1 FROM booking_reschedule_requests WHERE booking_id=$1 AND id<>$2 AND status='approved' LIMIT 1",[booking.id,request.id]);
+  if(prior.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã đổi thành công một lần.');}
+  const oldTaxi=await c.query("SELECT 1 FROM pet_taxi_requests WHERE booking_id=$1 AND status='completed' LIMIT 1",[booking.id]);
+  if(oldTaxi.rowCount){await c.query('ROLLBACK');return fail(res,409,'Taxi đã hoàn thành một chiều; không thể đổi lịch tự động.');}
+  const activeTaxi=await c.query("SELECT 1 FROM pet_taxi_legs WHERE booking_id=$1 AND state NOT IN ('requested','confirmed') LIMIT 1",[booking.id]);
+  if(activeTaxi.rowCount){await c.query('ROLLBACK');return fail(res,409,'Taxi đã bắt đầu hoặc kết thúc chuyến; không thể đổi lịch tự động.');}
+  const newDate=request.proposed_date_iso,newSlot=request.proposed_slot;
   if(!validFutureDate(newDate)||!validSlot(booking.service,newSlot)){await c.query('ROLLBACK');return fail(res,409,'Thời gian yêu cầu đã không còn hợp lệ.');}
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',[booking.branch,newDate+' '+newSlot]);
   await c.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))',['petday-pet-'+booking.pet_id,newDate]);
   const otherPetBookings=await c.query("SELECT service,slot FROM bookings WHERE pet_id=$1 AND booking_date=$2 AND id<>$3 AND status NOT IN ('Đã hủy','Không đến')",[booking.pet_id,newDate,booking.id]);
   if(otherPetBookings.rows.some(other=>servicesOverlap(other.service,other.slot,booking.service,newSlot))){await c.query('ROLLBACK');return fail(res,409,'Không thể duyệt: thú cưng đã có lịch khác trùng thời gian trên ngày mới.');}
   const closed=await c.query('SELECT 1 FROM blocked_slots WHERE branch=$1 AND booking_date=$2 AND slot=$3',[booking.branch,newDate,newSlot]);if(closed.rowCount){await c.query('ROLLBACK');return fail(res,409,'Khung giờ đề nghị đã được khóa, không thể duyệt.');}const cap=booking.branch==='PetDay Phú Mỹ Hưng'?Math.max(2,slots[newSlot]-1):slots[newSlot];
-  const used=await c.query("SELECT COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int AS used FROM bookings WHERE branch=$1 AND booking_date=$2 AND slot=$3 AND status <> 'Đã hủy' AND id<>$4",[booking.branch,newDate,newSlot,booking.id]);
+  const used=await c.query("SELECT COALESCE(SUM(CASE WHEN service IN ('Grooming tạo kiểu','Spa dịu nhẹ','Spa thư giãn','Spa dưỡng lông','Spa phục hồi lông','Daycare cả ngày') THEN 2 ELSE 1 END),0)::int AS used FROM bookings WHERE branch=$1 AND booking_date=$2 AND slot=$3 AND status <> 'Đã hủy' AND id<>$4",[booking.branch,newDate,newSlot,booking.id]);
   if(used.rows[0].used+services[booking.service].units>cap){await c.query('ROLLBACK');return fail(res,409,'Khung giờ mới đã hết chỗ. Không thể duyệt.');}
-  await releaseStaff(c,booking.id,req.user.id,'Lịch được duyệt đổi ngày hoặc giờ');await c.query('UPDATE bookings SET booking_date=$1,slot=$2 WHERE id=$3',[newDate,newSlot,booking.id]);
+  await releaseStaff(c,booking.id,req.user.id,'Lịch được duyệt đổi ngày hoặc giờ');
+  const changed=await c.query("UPDATE bookings SET booking_date=$1,slot=$2 WHERE id=$3 RETURNING to_char(booking_date,'YYYY-MM-DD') AS date,slot",[newDate,newSlot,booking.id]);
+  if(changed.rowCount!==1||changed.rows[0].date!==newDate||changed.rows[0].slot!==newSlot)throw Error('Không xác minh được thời gian mới của lịch hẹn.');
+  await c.query("UPDATE pet_taxi_legs SET state='requested',scheduled_at=NULL,customer_plan=NULL,updated_at=now() WHERE booking_id=$1 AND state='confirmed'",[booking.id]);
   const taxiReschedule=await c.query("UPDATE pet_taxi_requests SET status='requested',updated_at=now(),updated_by=$2 WHERE booking_id=$1 AND status<>'requested' RETURNING id",[booking.id,req.user.id]);
   if(taxiReschedule.rowCount)await notify(c,booking.customer_id,'Pet Taxi cần xác nhận lại','Lịch vừa được đổi ngày/giờ; PetDay sẽ điều phối lại chuyến đón trước khi phục vụ.',booking.code);
  }
- await c.query('UPDATE booking_reschedule_requests SET status=$1,resolved_at=now() WHERE id=$2',[decision,request.id]);
- await notify(c,booking.customer_id,'Yêu cầu đổi lịch '+booking.code,decision==='approved'?'Đã duyệt thời gian mới.':'Yêu cầu đổi lịch chưa được chấp thuận.',booking.code);
- await c.query('COMMIT');res.json({id:request.id,status:decision});
+ if(!repairApproved)await c.query('UPDATE booking_reschedule_requests SET status=$1,resolved_at=now() WHERE id=$2',[decision,request.id]);
+ await notify(c,booking.customer_id,repairApproved?'Đã đồng bộ lịch '+booking.code:'Kết quả đổi lịch '+booking.code,decision==='approved'?'Thời gian mới đã được cập nhật trong lịch hẹn.':'Đề xuất đổi lịch không được chấp thuận; lịch cũ giữ nguyên.',booking.code);
+ const current=await c.query("SELECT to_char(booking_date,'YYYY-MM-DD') AS date,slot FROM bookings WHERE id=$1",[booking.id]);
+ await c.query('COMMIT');res.json({id:request.id,status:decision,bookingCode:booking.code,bookingDate:current.rows[0].date,bookingSlot:current.rows[0].slot,repaired:repairApproved});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+}
+app.patch('/api/admin/reschedule-requests/:id',auth,admin,handler(resolveRescheduleRequest));
+app.patch('/api/my/reschedule-proposals/:id',auth,handler(async(req,res)=>{
+ if(req.user.role!=='customer')return fail(res,403,'Chỉ khách hàng được xác nhận đề xuất của PetDay.');
+ return resolveRescheduleRequest(req,res);
 }));
 // V6.28 - Confirmed appointment cancellation request. No automatic refunds or payment status changes.
 app.get('/api/cancellation-requests',auth,handler(async(req,res)=>{
  const filter=req.user.role==='admin'?'':'WHERE r.customer_id=$1';
  if(req.user.role==='staff')return fail(res,403,'Không có quyền xem yêu cầu hủy lịch.');
- const q=`SELECT r.id,r.reason,r.status,r.admin_note AS "adminNote",r.created_at AS "createdAt",r.resolved_at AS "resolvedAt",b.code AS "bookingCode",b.service,to_char(b.booking_date,'YYYY-MM-DD') AS date,b.slot,b.payment_status AS "paymentStatus",b.total
+ const q=`SELECT r.id,r.reason,r.status,r.admin_note AS "adminNote",r.created_at AS "createdAt",r.resolved_at AS "resolvedAt",b.code AS "bookingCode",b.service,to_char(b.booking_date,'YYYY-MM-DD') AS date,b.slot,b.payment_status AS "paymentStatus",b.total,b.line_items AS "lineItems"
   FROM booking_cancellation_requests r JOIN bookings b ON b.id=r.booking_id ${filter} ORDER BY r.created_at DESC LIMIT 150`;
  const out=await pool.query(q,req.user.role==='admin'?[]:[req.user.id]);res.json(out.rows);
 }));
@@ -1034,15 +1517,18 @@ app.post('/api/bookings/:code/cancellation-request',auth,handler(async(req,res)=
   if(!r.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch của bạn.');}
   const b=r.rows[0];
   const pending=await c.query("SELECT 1 FROM booking_cancellation_requests WHERE booking_id=$1 AND status='pending'",[b.id]);
-  const localToday=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const issue=cancellationRequestIssue({role:req.user.role,status:b.status,bookingDate:b.booking_date.toISOString().slice(0,10),today:localToday,alreadyPending:pending.rowCount>0,paid:b.payment_status==='Đã thanh toán'});
+  const dateText=(await c.query("SELECT to_char(booking_date,'YYYY-MM-DD') AS date FROM bookings WHERE id=$1",[b.id])).rows[0].date;
+  const requestedAt=new Date();
+  const policy=cancellationPolicy({date:dateText,slot:b.slot,requestedAt,total:serviceRefundBase(b.total,b.line_items)});
+  const issue=cancellationRequestIssue({role:req.user.role,status:b.status,bookingDate:dateText,today:dateText,alreadyPending:pending.rowCount>0,paid:b.payment_status==='Đã thanh toán',allowSameDay:true});
   if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
-  const out=await c.query('INSERT INTO booking_cancellation_requests(booking_id,customer_id,reason) VALUES($1,$2,$3) RETURNING id,status',[b.id,req.user.id,d.reason]);
-  await c.query('COMMIT');res.status(201).json(out.rows[0]);
+  if(policy.window==='started'||policy.window==='invalid'){await c.query('ROLLBACK');return fail(res,409,'Không thể gửi yêu cầu hủy sau giờ bắt đầu chăm sóc. Vui lòng liên hệ PetDay để được hỗ trợ.');}
+  const out=await c.query('INSERT INTO booking_cancellation_requests(booking_id,customer_id,reason) VALUES($1,$2,$3) RETURNING id,status,created_at AS "createdAt"',[b.id,req.user.id,d.reason]);
+  await c.query('COMMIT');res.status(201).json({...out.rows[0],cancellationPolicy:cancellationPolicy({date:dateText,slot:b.slot,requestedAt:out.rows[0].createdAt,total:serviceRefundBase(b.total,b.line_items)})});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
 }));
 app.patch('/api/admin/cancellation-requests/:id',auth,admin,handler(async(req,res)=>{
- const d=z.object({decision:z.enum(['approved','rejected']),note:z.string().trim().min(8).max(800)}).parse(req.body);
+ const d=z.object({decision:z.enum(['approved','rejected']),note:z.string().trim().min(8).max(800),exceptionRefundAmount:z.number().int().nonnegative().optional()}).strict().parse(req.body);
  const c=await pool.connect();try{await c.query('BEGIN');
   const r=await c.query('SELECT * FROM booking_cancellation_requests WHERE id=$1 FOR UPDATE',[req.params.id]);
   if(!r.rowCount){await c.query('ROLLBACK');return fail(res,404,'Không thấy yêu cầu.');}
@@ -1051,29 +1537,38 @@ app.patch('/api/admin/cancellation-requests/:id',auth,admin,handler(async(req,re
   const b=await c.query('SELECT * FROM bookings WHERE id=$1 FOR UPDATE',[request.booking_id]);
   const booking=b.rows[0];
   if(!booking){await c.query('ROLLBACK');return fail(res,404,'Không tìm thấy lịch.');}
+  const dateText=(await c.query("SELECT to_char(booking_date,'YYYY-MM-DD') AS date FROM bookings WHERE id=$1",[booking.id])).rows[0].date;
+  const policy=cancellationPolicy({date:dateText,slot:booking.slot,requestedAt:request.created_at,total:serviceRefundBase(booking.total,booking.line_items)});
+  if(policy.window==='invalid'){await c.query('ROLLBACK');return fail(res,409,'Không xác định được mốc thời gian hủy để tính hoàn tiền.');}
   const events=await c.query("SELECT 1 FROM service_events WHERE booking_id=$1 LIMIT 1",[booking.id]);
   const issue=cancellationDecisionIssue({requestStatus:request.status,bookingStatus:booking.status,hasCareEvents:events.rowCount>0});
   if(issue){await c.query('ROLLBACK');return fail(res,409,issue);}
+  if(d.exceptionRefundAmount!==undefined&&(d.decision!=='approved'||policy.window!=='late')){await c.query('ROLLBACK');return fail(res,422,'Chỉ được ghi ngoại lệ hoàn tiền cho yêu cầu hủy sát giờ đã được chấp thuận.');}
+  if(d.exceptionRefundAmount!==undefined&&(booking.payment_status!=='Đã thanh toán'||d.exceptionRefundAmount>serviceRefundBase(booking.total,booking.line_items))){await c.query('ROLLBACK');return fail(res,422,'Khoản hoàn ngoại lệ không hợp lệ hoặc vượt số tiền đã thu.');}
   if(d.decision==='approved'){
    await releaseStaff(c,booking.id,req.user.id,'Duyệt yêu cầu hủy lịch của khách');
    await c.query("UPDATE bookings SET status='Đã hủy' WHERE id=$1",[booking.id]);
-   await c.query("UPDATE pet_taxi_requests SET status='cancelled',updated_by=$2,updated_at=now() WHERE booking_id=$1 AND status IN ('requested','confirmed')",[booking.id,req.user.id]);
+   await closeUnusedTaxiLegs(c,booking.id,req.user.id,'Lịch chăm sóc đã hủy; các chiều Taxi chưa xuất phát đóng và chờ đối soát.');
    await c.query("UPDATE booking_reschedule_requests SET status='rejected',resolved_at=now() WHERE booking_id=$1 AND status='pending'",[booking.id]);
    // V6.82: create the refund case atomically with a paid cancellation.
    // This is an AUDITABLE REQUEST, not a claim that money was transferred.
    // Unique booking_id prevents duplicate refund cases on concurrent requests.
    if(booking.payment_status==='Đã thanh toán'){
-    const amount=Number(booking.total);
-    if(!Number.isSafeInteger(amount)||amount<=0){await c.query('ROLLBACK');return fail(res,409,'Không thể xác định số tiền hoàn. Vui lòng kiểm tra khoản thu trước khi duyệt hủy.');}
-    const reason='Hoàn tiền sau khi duyệt hủy lịch '+booking.code+'. Lý do khách: '+request.reason;
-    const refund=await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason)
-      VALUES($1,$2,$3,$4) ON CONFLICT (booking_id) DO NOTHING RETURNING id`,
-     [booking.id,booking.customer_id,amount,reason]);
-    if(refund.rowCount)await notify(c,booking.customer_id,'Đã mở hồ sơ hoàn tiền · '+booking.code,'Yêu cầu hủy đã được duyệt. Hồ sơ hoàn tiền đang chờ Admin kiểm tra, chưa có khoản hoàn thực tế.',booking.code);
+    const amount=d.exceptionRefundAmount!==undefined?d.exceptionRefundAmount:policy.refundAmount;
+    if(!Number.isSafeInteger(Number(booking.total))||Number(booking.total)<=0){await c.query('ROLLBACK');return fail(res,409,'Không thể xác định số tiền đã thu. Vui lòng kiểm tra khoản thu trước khi duyệt hủy.');}
+    // A late cancellation normally has 0 refund. Admin may explicitly grant an
+    // exceptional amount with a reason; approval only opens a refund case.
+    if(amount>0){
+     const reason=`Hủy theo chính sách ${policy.label}; hoàn dự kiến ${amount}đ/${booking.total}đ.`+(d.exceptionRefundAmount!==undefined?' Ngoại lệ Admin: '+d.note+'.':'')+' Lý do khách: '+request.reason;
+     const refund=await c.query(`INSERT INTO refund_requests(booking_id,customer_id,amount,reason)
+       VALUES($1,$2,$3,$4) ON CONFLICT (booking_id) DO NOTHING RETURNING id`,
+      [booking.id,booking.customer_id,amount,reason]);
+     if(refund.rowCount)await notify(c,booking.customer_id,'Đã mở hồ sơ hoàn tiền · '+booking.code,'Yêu cầu hủy đã được duyệt. Số tiền dự kiến: '+amount.toLocaleString('vi-VN')+'đ. Hồ sơ đang chờ xét duyệt, chưa có khoản hoàn thực tế.',booking.code);
+    }
    }
   }
   await c.query('UPDATE booking_cancellation_requests SET status=$1,admin_note=$2,resolved_at=now(),resolved_by=$3 WHERE id=$4',[d.decision,d.note,req.user.id,request.id]);
-  const paymentInfo=booking.payment_status==='Đã thanh toán'&&d.decision==='approved'?' Hồ sơ hoàn tiền đã được tạo và đang chờ Admin xem xét; chưa có tiền được hoàn.':'';
+  const paymentInfo=booking.payment_status==='Đã thanh toán'&&d.decision==='approved'?(policy.refundAmount>0||Number(d.exceptionRefundAmount)>0?' Hồ sơ hoàn tiền dự kiến đã được mở, chưa có tiền được hoàn.':' Theo chính sách hủy sát giờ, không phát sinh hoàn tiền tự động; Admin có thể xử lý ngoại lệ riêng.'):'';
   await notify(c,booking.customer_id,'Yêu cầu hủy lịch '+booking.code,d.decision==='approved'?'Đã chấp thuận yêu cầu hủy. '+d.note+paymentInfo:'Chưa chấp thuận yêu cầu hủy. '+d.note,booking.code);
   await c.query('COMMIT');res.json({id:request.id,status:d.decision});
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
@@ -1084,6 +1579,7 @@ app.patch('/api/bookings/:code/cancel',auth,handler(async(req,res)=>{
  const r=await c.query("UPDATE bookings SET status='Đã hủy' WHERE code=$1 AND customer_id=$2 AND status='Đang chờ xác nhận' AND payment_status='Chưa thanh toán' RETURNING *",[req.params.code,req.user.id]);
  if(!r.rowCount){await c.query('ROLLBACK');return fail(res,409,'Lịch đã thanh toán cần gửi yêu cầu hủy để Admin xử lý hoàn tiền. Chỉ tự hủy lịch chờ xác nhận chưa thanh toán.');}
  await releaseStaff(c,r.rows[0].id,req.user.id,'Khách hủy lịch chờ xác nhận');
+ await closeUnusedTaxiLegs(c,r.rows[0].id,req.user.id,'Khách hủy lịch chưa thanh toán; đóng Taxi chưa xuất phát.');
  await notify(c,req.user.id,'Lịch đã hủy '+req.params.code,'Yêu cầu hủy lịch đã được ghi nhận.',req.params.code);
  await c.query('COMMIT');res.json(r.rows[0]);
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
@@ -1109,7 +1605,7 @@ app.get('/api/bookings/:code/timeline',auth,handler(async(req,res)=>{
  res.json({bookingCode:b.rows[0].code,status:b.rows[0].status,events:rows.rows});
 }));
 app.post(['/api/admin/bookings/:code/milestone','/api/staff/bookings/:code/milestone'],auth,careOperator,handler(async(req,res)=>{
- const d=z.object({eventType:z.enum(['check_in','care_update','ready','check_out']),note:z.string().trim().max(1200).default(''),photoUrl:z.string().regex(/^\/uploads\/[a-f0-9-]+\.(jpg|png|webp)$/).optional()}).strict().parse(req.body);
+ const d=z.object({eventType:z.enum(['pet_arrived','check_in','care_update','ready','check_out','pet_handed_over']),handoffSource:z.enum(['customer','taxi']).optional(),note:z.string().trim().max(1200).default(''),photoUrl:z.string().regex(/^\/uploads\/[a-f0-9-]+\.(jpg|png|webp)$/).optional()}).strict().parse(req.body);
  const c=await pool.connect();
  try{await c.query('BEGIN');
   const q=await c.query('SELECT * FROM bookings WHERE code=$1 FOR UPDATE',[req.params.code]);
@@ -1124,25 +1620,52 @@ app.post(['/api/admin/bookings/:code/milestone','/api/staff/bookings/:code/miles
   const types=current.rows.map(x=>x.event_type);
   const has=(type)=>types.includes(type);
   if(b.status==='Đã hủy'){await c.query('ROLLBACK');return fail(res,409,'Lịch đã hủy không thể ghi nhận chăm sóc.');}
+  // Physical reception is a distinct milestone from starting care. A completed taxi trip alone
+  // does not mean PetDay staff has accepted the animal.
+  if(d.eventType==='pet_arrived'){
+   if(b.status!=='Đã xác nhận'||has('pet_arrived')||has('check_in')){await c.query('ROLLBACK');return fail(res,409,'Chỉ xác nhận pet đến một lần khi lịch đã được duyệt và chưa bắt đầu.');}
+   if(!d.handoffSource){await c.query('ROLLBACK');return fail(res,422,'Chọn nguồn bàn giao: khách tự đưa đến hoặc Pet Taxi.');}
+   const ownership=await c.query('SELECT id FROM pets WHERE id=$1 AND owner_id=$2',[b.pet_id,b.customer_id]);
+   if(!ownership.rowCount){await c.query('ROLLBACK');return fail(res,409,'Thông tin thú cưng và lịch hẹn không khớp.');}
+   const taxi=await c.query("SELECT direction FROM pet_taxi_requests WHERE booking_id=$1",[b.id]);
+   if(d.handoffSource==='taxi'){
+    if(!taxi.rowCount||!['pickup','round_trip'].includes(taxi.rows[0].direction)){await c.query('ROLLBACK');return fail(res,409,'Lịch không có Taxi chiều đón để bàn giao.');}
+    const completed=await c.query("SELECT 1 FROM pet_taxi_legs WHERE booking_id=$1 AND leg='pickup' AND state='completed'",[b.id]);
+    if(!completed.rowCount){await c.query('ROLLBACK');return fail(res,409,'Taxi chưa xác nhận bàn giao tại cơ sở.');}
+   }
+   if(d.handoffSource==='customer'&&taxi.rowCount&&['pickup','round_trip'].includes(taxi.rows[0].direction)){
+    const leg=await c.query("SELECT state FROM pet_taxi_legs WHERE booking_id=$1 AND leg='pickup' FOR UPDATE",[b.id]);
+    if(!leg.rowCount||leg.rows[0].state!=='customer_self'){await c.query('ROLLBACK');return fail(res,409,'Khách tự đưa pet đến: cần ghi nhận bỏ chiều đón trong mục Pet Taxi trước khi tiếp nhận. Nếu xe đã xuất phát, hãy xử lý sự cố trước.');}
+   }
+   if(d.note.trim().length<3){await c.query('ROLLBACK');return fail(res,422,'Ghi chú xác nhận đúng thú cưng ít nhất 3 ký tự.');}
+  }
+  if(d.eventType==='check_in'&&!has('pet_arrived')){await c.query('ROLLBACK');return fail(res,409,'Chưa xác nhận thú cưng đã đến và được tiếp nhận. Hãy Check-in trước khi bắt đầu dịch vụ.');}
   if(d.eventType==='check_in'&&b.payment_method==='bank_transfer'&&b.payment_status!=='Đã thanh toán'){await c.query('ROLLBACK');return fail(res,409,'Lịch chuyển khoản chưa được xác nhận thanh toán, không thể bắt đầu dịch vụ.');}
   if(d.eventType==='check_in'){
    if(b.status!=='Đã xác nhận'){await c.query('ROLLBACK');return fail(res,409,'Lịch phải được duyệt trước khi tiếp nhận.');}
-   const taxi=await c.query('SELECT status FROM pet_taxi_requests WHERE booking_id=$1',[b.id]);
-   if(taxi.rowCount&&taxi.rows[0].status!=='completed'){await c.query('ROLLBACK');return fail(res,409,'Lịch có Pet Taxi: cần xác nhận đã đưa thú cưng đến cơ sở trước khi check-in.');}
-   const staffed=await c.query('SELECT 1 FROM staff_members WHERE active=true AND branch=$1 LIMIT 1',[b.branch]);
-   if(staffed.rowCount){const assigned=await c.query('SELECT 1 FROM booking_assignments WHERE booking_id=$1',[b.id]);
-     if(!assigned.rowCount){await c.query('ROLLBACK');return fail(res,409,'Cơ sở đã thiết lập nhân viên. Vui lòng phân công nhân viên trước khi check-in.');}
-   }
+   // V6.104: Check-in is required; separate staff assignment is not.
+
   }
-  const stepIssue=careStepIssue(d.eventType,{status:b.status,hasCheckIn:has('check_in'),hasCareUpdate:has('care_update'),hasReady:has('ready'),hasCheckOut:has('check_out')});
+  // Handoff is the closing milestone and must never be confused with care completion.
+  if(d.eventType==='pet_handed_over'){
+   if(b.status!=='Đang thực hiện'||!has('check_out')||has('pet_handed_over')){await c.query('ROLLBACK');return fail(res,409,'Chỉ bàn giao pet sau khi hoàn tất chăm sóc, một lần duy nhất.');}
+   const returning=await c.query("SELECT state FROM pet_taxi_legs WHERE booking_id=$1 AND leg='return' FOR UPDATE",[b.id]);
+   if(!canCloseWithCustomerHandoff({bookingStatus:b.status,careCompleted:has('check_out'),alreadyHandedOver:has('pet_handed_over'),returnState:returning.rows[0]?.state})){
+    await c.query('ROLLBACK');return fail(res,409,'Chỉ bàn giao khi chăm sóc xong và Taxi chiều về không còn hiệu lực. Nếu Taxi đang chạy, xác nhận bàn giao qua Taxi.');
+   }
+   if(d.note.trim().length<3){await c.query('ROLLBACK');return fail(res,422,'Ghi nhận người nhận pet (ít nhất 3 ký tự).');}
+  }
+  // Completion here is the end of care, not return-trip handoff.
+  // Taxi chiều về is tracked independently and can depart only after this milestone.
+  const stepIssue=d.eventType==='pet_handed_over'?null:careStepIssue(d.eventType,{status:b.status,hasPetArrived:has('pet_arrived'),hasCheckIn:has('check_in'),hasCareUpdate:has('care_update'),hasReady:has('ready'),hasCheckOut:has('check_out')});
   if(stepIssue){await c.query('ROLLBACK');return fail(res,409,stepIssue);}
   if(d.photoUrl){try{await (await import('node:fs/promises')).access(new URL('../uploads/'+d.photoUrl.split('/').pop(),import.meta.url));}catch{await c.query('ROLLBACK');return fail(res,422,'Ảnh chưa được tải lên máy chủ.');}}
-  const milestoneTitles={check_in:'Bắt đầu dịch vụ',care_update:'Cập nhật chăm sóc',ready:'Sẵn sàng bàn giao',check_out:'Hoàn tất dịch vụ'};
-  const recordedNote=d.note||milestoneTitles[d.eventType];
+  const milestoneTitles={pet_arrived:'Xác nhận thú cưng đến cơ sở',check_in:'Bắt đầu dịch vụ',care_update:'Cập nhật chăm sóc',ready:'Sẵn sàng bàn giao',check_out:'Hoàn tất chăm sóc',pet_handed_over:'Đã bàn giao pet cho khách'};
+  const recordedNote=d.eventType==='pet_arrived'?(d.handoffSource==='taxi'?'Bàn giao từ Pet Taxi: ':'Khách tự đưa đến: ')+d.note:(d.note||milestoneTitles[d.eventType]);
   const created=await c.query('INSERT INTO service_events(booking_id,event_type,note,created_by,photo_url) VALUES($1,$2,$3,$4,$5) RETURNING id,event_type,created_at,photo_url',[b.id,d.eventType,recordedNote,req.user.id,d.photoUrl||null]);
   if(d.eventType==='check_in')await c.query("UPDATE bookings SET status='Đang thực hiện' WHERE id=$1",[b.id]);
-  if(d.eventType==='check_out')await c.query("UPDATE bookings SET status='Hoàn tất' WHERE id=$1",[b.id]);
-  const names={check_in:'Đã tiếp nhận thú cưng',care_update:'Cập nhật chăm sóc',ready:'Sẵn sàng bàn giao',check_out:'Đã bàn giao và hoàn tất'};
+  if(d.eventType==='pet_handed_over')await c.query("UPDATE bookings SET status='Hoàn tất' WHERE id=$1",[b.id]);
+  const names={pet_arrived:'Thú cưng đã được tiếp nhận tại cơ sở',check_in:'Đã bắt đầu chăm sóc',care_update:'Cập nhật chăm sóc',ready:'Sẵn sàng bàn giao',check_out:'Đã hoàn tất chăm sóc, chờ bàn giao pet',pet_handed_over:'Đã bàn giao pet và hoàn tất toàn bộ lịch'};
   await notify(c,b.customer_id,names[d.eventType]+' · '+b.code,recordedNote,b.code);
   await c.query('COMMIT');res.status(201).json(created.rows[0]);
  }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
@@ -1310,7 +1833,7 @@ app.get('/api/admin/queue',auth,admin,handler(async(req,res)=>{
  res.json(q.rows);
 }));
 
-app.use((err,req,res,next)=>{if(err.type==='entity.too.large')return fail(res,413,'Ảnh vượt quá dung lượng 5 MB. Hãy nén ảnh và thử lại.');if(req.path==='/api/pets/photo'&&['EACCES','EPERM','ENOSPC'].includes(err.code)){console.error('[pet-photo-storage]',err.code);return fail(res,507,'Không lưu được ảnh vào server/uploads. Kiểm tra quyền ghi và dung lượng ổ đĩa.');}if(err instanceof z.ZodError)return fail(res,400,err.issues.map(i=>i.path.join('.')+': '+i.message).join('; '));if(err.code==='23505')return fail(res,409,'Dữ liệu đã tồn tại hoặc trùng lịch. Vui lòng tải lại.');if(err.code==='23503')return fail(res,400,'Tham chiếu dữ liệu không hợp lệ.');if(err.code==='23514'&&err.constraint==='bookings_service_check'){console.error('[service-constraint]',err.message);return fail(res,503,'Database chưa cập nhật danh mục 8 gói. Sao lưu petday, đối chiếu SQL 022_v638_service_packages.sql; không chạy lại SQL 001–021.');}if(err.code==='23514'){console.error('[check-constraint]',req.path,err.constraint,err.message);return fail(res,422,'Dữ liệu chưa đáp ứng điều kiện của hệ thống: '+(err.constraint||'kiểm tra dữ liệu')+'. Vui lòng kiểm tra lại.');}if(err.code==='42703'||err.code==='42P01'){console.error('[schema-mismatch]',req.method,req.path,err.code,err.message);return fail(res,503,'Cấu trúc PostgreSQL chưa đồng bộ với source. Kiểm tra /api/health/schema và các migration 009–020 sau khi sao lưu.');}console.error(err);return fail(res,500,'Lỗi xử lý API. Kiểm tra terminal backend và đường dẫn API gặp lỗi.');});
+app.use((err,req,res,next)=>{if(err.type==='entity.too.large')return fail(res,413,'Ảnh vượt quá dung lượng 5 MB. Hãy nén ảnh và thử lại.');if(req.path==='/api/pets/photo'&&['EACCES','EPERM','ENOSPC'].includes(err.code)){console.error('[pet-photo-storage]',err.code);return fail(res,507,'Không lưu được ảnh vào server/uploads. Kiểm tra quyền ghi và dung lượng ổ đĩa.');}if(err instanceof z.ZodError)return fail(res,400,err.issues.map(i=>i.path.join('.')+': '+i.message).join('; '));if(err.code==='23505')return fail(res,409,'Dữ liệu đã tồn tại hoặc trùng lịch. Vui lòng tải lại.');if(err.code==='23503')return fail(res,400,'Tham chiếu dữ liệu không hợp lệ.');if(err.code==='23514'&&err.constraint==='bookings_service_check'){console.error('[service-constraint]',err.message);return fail(res,503,'Database chưa cập nhật danh mục 8 gói. Sao lưu petday, đối chiếu SQL 022_v638_service_packages.sql; không chạy lại SQL 001–021.');}if(err.code==='23514'){console.error('[check-constraint]',req.path,err.constraint,err.message);return fail(res,422,'Dữ liệu chưa đáp ứng điều kiện của hệ thống: '+(err.constraint||'kiểm tra dữ liệu')+'. Vui lòng kiểm tra lại.');}if(err.code==='42703'||err.code==='42P01'){console.error('[schema-mismatch]',req.method,req.path,err.code,err.message);return fail(res,503,'Truy vấn database gặp lỗi thiếu bảng/cột. Xem dòng [schema-mismatch] trong Terminal backend để xác định chính xác. Không chạy lại migration hàng loạt.');}console.error(err);return fail(res,500,'Lỗi xử lý API. Kiểm tra terminal backend và đường dẫn API gặp lỗi.');});
 app.listen(Number(process.env.PORT||4000),()=>{
  console.log('PetDay API running at http://localhost:'+(process.env.PORT||4000));
  if(autoRemindersEnabled){

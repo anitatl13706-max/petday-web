@@ -5,7 +5,7 @@ const pet=(age,species='Chó',weight=8)=>({age,species,weight});
 test('Daycare minimum age is one year',()=>assert.equal(daycareMinimumAgeYears,1));
 test('Daycare rejects puppies younger than one year',()=>assert.throws(()=>calculate('Daycare nửa ngày',pet(0.3)),/1 tuổi/));
 test('Daycare accepts one-year-old dog under weight limit',()=>assert.ok(calculate('Daycare nửa ngày',pet(1)).total>0));
-test('Daycare rejects cat',()=>assert.throws(()=>calculate('Daycare nửa ngày',pet(1,'Mèo')),/Loài/));
+test('Daycare accepts eligible adult cat',()=>assert.ok(calculate('Daycare nửa ngày',pet(1,'Mèo')).total>0));
 test('Daycare rejects dog over 30kg',()=>assert.throws(()=>calculate('Daycare cả ngày',pet(1,'Chó',35)),/Loài/));
 test('Grooming still supports adult cats',()=>assert.ok(calculate('Grooming cơ bản',pet(2,'Mèo',5)).total>0));
 test('reject invalid age or zero weight',()=>{assert.throws(()=>calculate('Grooming cơ bản',pet(-1)),/Tuổi/);assert.throws(()=>calculate('Grooming cơ bản',pet(1,'Chó',0)),/Loài/)});
