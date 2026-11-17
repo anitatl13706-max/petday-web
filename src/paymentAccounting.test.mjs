@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {summariseBookingPayment as s} from './paymentAccounting.mjs';
+const base={total:180000,lineItems:[{type:'first_use_deposit',requiredAmount:36000}]};
+test('first-use booking awaits required deposit',()=>assert.equal(s({...base,collectedPaid:0}).stage,'DEPOSIT_PENDING'));
+test('20% deposit is separate from bank total',()=>{const v=s({...base,paymentPlan:'DEPOSIT_20',bankPaid:36000,depositApplied:36000,collectedPaid:36000});assert.equal(v.stage,'DEPOSIT_PAID');assert.equal(v.remaining,144000);assert.equal(v.depositApplied,36000)});
+test('full prepaid 100% is not labeled 100% deposit',()=>{const v=s({...base,paymentPlan:'FULL_PREPAY',bankPaid:180000,depositApplied:0,collectedPaid:180000});assert.equal(v.stage,'PAID');assert.equal(v.depositApplied,0)});
+test('cash plus bank remains split',()=>{const v=s({...base,paymentPlan:'DEPOSIT_20',bankPaid:36000,cashPaid:100000,depositApplied:36000,collectedPaid:136000});assert.equal(v.stage,'PARTIALLY_PAID');assert.equal(v.remaining,44000);assert.equal(v.bank,36000);assert.equal(v.cash,100000)});
+test('unknown legacy bank receipts not misclassified as deposits',()=>{const v=s({...base,bankPaid:180000,depositApplied:0,collectedPaid:180000});assert.equal(v.depositApplied,0);assert.equal(v.stage,'PAID')});
+test('customer without mandatory deposit can pay later',()=>assert.equal(s({total:140000,collectedPaid:0,lineItems:[],paymentPlan:'PAY_LATER'}).stage,'UNPAID'));

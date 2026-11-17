@@ -64,11 +64,14 @@ const branches = [
 ];
 
 const timeSlots = [
-  { time: '08:30', capacity: 3 },
-  { time: '10:00', capacity: 2 },
-  { time: '13:30', capacity: 3 },
-  { time: '15:00', capacity: 2 },
-  { time: '17:30', capacity: 2 },
+  { time: '08:00', capacity: 3 },
+  { time: '09:30', capacity: 3 },
+  { time: '11:00', capacity: 3 },
+  { time: '12:30', capacity: 3 },
+  { time: '14:00', capacity: 3 },
+  { time: '15:30', capacity: 3 },
+  { time: '17:00', capacity: 3 },
+  { time: '18:30', capacity: 3 },
 ];
 
 function getStored<T>(key: string, fallback: T): T {
@@ -103,8 +106,8 @@ function slotState(branch: string, date: string, slot: string, service: ServiceK
   const config = timeSlots.find(item => item.time === slot);
   if (!config) return { available: false, remaining: 0, reason: 'Khung giờ không hợp lệ' };
   const branchCapacity = branch === 'phu-my-hung' ? Math.max(2, config.capacity - 1) : config.capacity;
-  const scheduleAllowed = service !== 'daycare' || ['08:30', '10:00'].includes(slot);
-  const closingAllowed = service !== 'spa' || slot !== '17:30';
+  const scheduleAllowed = service !== 'daycare' || ['08:00', '09:30'].includes(slot);
+  const closingAllowed = Number(slot.slice(0,2))*60+Number(slot.slice(3))+(service==='spa'?100:90)<=1200;
   if (!scheduleAllowed || !closingAllowed) return { available: false, remaining: 0, reason: 'Không phù hợp thời lượng dịch vụ' };
   const occupied = mockReserved(branch, date, slot);
   const units = serviceRules[service].capacityUnits;
@@ -168,7 +171,7 @@ function PriceSummary({ rows, discount, total }: { rows: { label: string; value:
         <div className={`flex justify-between text-sm ${discount > 0 ? 'text-emerald-700' : 'text-[#8994A5]'}`}><span>Giảm giá hợp lệ</span><strong>{discount > 0 ? `−${money(discount)}` : money(0)}</strong></div>
       </div>
       <div className="mt-5 flex items-end justify-between border-t border-[#142B55]/10 pt-4"><span className="text-sm font-semibold text-[#526078]">Tổng dự kiến</span><strong className="text-2xl text-[#FF765E]">{money(total)}</strong></div>
-      <p className="mt-3 text-[11px] leading-5 text-[#7A879B]">Giá được tính theo quy tắc mẫu và chỉ được chốt khi bạn xác nhận. PetDay không xử lý thanh toán thật trong prototype.</p>
+      <p className="mt-3 text-[11px] leading-5 text-[#7A879B]">Giá được tính theo quy tắc mẫu và chỉ được chốt khi bạn xác nhận. Thanh toán được ghi nhận theo phương thức và trạng thái hiển thị trên đơn.</p>
     </aside>
   );
 }

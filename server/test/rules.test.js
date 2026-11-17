@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {calculate,transitions,validSlot,validFutureDate} from '../src/rules.js';
 test('pricing pet 6.5 kg',()=>assert.equal(calculate('Grooming toàn diện',{species:'Chó',weight:6.5,age:2}).total,230000));
 test('daycare accepts eligible adult cats',()=>assert.equal(calculate('Daycare cả ngày',{species:'Mèo',weight:4,age:2}).total,320000));
-test('daycare only morning',()=>assert.equal(validSlot('Daycare cả ngày','15:00'),false));
+test('daycare accepts custom arrival, within hours',()=>{assert.equal(validSlot('Daycare cả ngày','15:00'),true);assert.equal(validSlot('Daycare cả ngày','20:00'),false);});
 test('completed cannot transition',()=>assert.deepEqual(transitions['Hoàn tất'],[]));
 test('past date forbidden',()=>assert.equal(validFutureDate('2020-01-01'),false));
 import {calculateExtras} from '../src/rules.js';

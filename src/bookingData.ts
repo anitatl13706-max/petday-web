@@ -1,4 +1,4 @@
-export type BookingStatus = 'Đang chờ xác nhận' | 'Đã xác nhận' | 'Đang thực hiện' | 'Hoàn tất' | 'Đã hủy';
+export type BookingStatus = 'Đang chờ xác nhận' | 'Đã xác nhận' | 'Đang thực hiện' | 'Hoàn tất' | 'Không hoàn thành' | 'Đã hủy';
 export type PaymentStatus = 'Chưa thanh toán' | 'Thanh toán mô phỏng thành công' | 'Thanh toán thất bại (mô phỏng)' | 'Đã hoàn tiền (mô phỏng)';
 export type LineItemType = 'base' | 'weight' | 'addon' | 'taxi' | 'product' | 'discount';
 
@@ -50,7 +50,8 @@ export const BOOKING_EVENT = 'petday-bookings-updated';
 export const bookingTransitions: Record<BookingStatus, BookingStatus[]> = {
   'Đang chờ xác nhận': ['Đã xác nhận', 'Đã hủy'],
   'Đã xác nhận': ['Đang thực hiện', 'Đã hủy'],
-  'Đang thực hiện': ['Hoàn tất'],
+  'Đang thực hiện': ['Hoàn tất', 'Không hoàn thành'],
+  'Không hoàn thành': [],
   'Hoàn tất': [],
   'Đã hủy': [],
 };
@@ -103,7 +104,7 @@ export function normalizeBooking(raw: any): SharedBooking {
   return {
     code: raw.code ?? `PD-CU-${Date.now().toString(36).toUpperCase()}`,
     createdAt: raw.createdAt ?? new Date().toISOString(),
-    status: raw.status ?? 'Đang chờ xác nhận',
+    status: raw.status ?? 'Đã xác nhận',
     paymentStatus: raw.paymentStatus ?? 'Chưa thanh toán',
     owner: {
       name: raw.owner?.name || 'Tài khoản demo',
@@ -211,7 +212,7 @@ export function createBooking(input: NewBooking) {
     ...input,
     code: bookingCode(bookings),
     createdAt: new Date().toISOString(),
-    status: 'Đang chờ xác nhận',
+    status: 'Đã xác nhận',
   };
   saveBookings([record, ...bookings], 'Khách hàng tạo lịch hẹn mẫu', record.code);
   return record;

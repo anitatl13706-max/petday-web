@@ -8,8 +8,8 @@ export function initialTaxiLeg(request, leg) {
     ? request.status === 'completed' && request.direction !== 'return'
     : request.direction === 'return' && request.status === 'completed' || Boolean(request.return_completed_at);
   const closed = request.booking_status === 'Đã hủy' || request.status === 'cancelled';
-  const state = delivered ? 'completed' : closed ? 'cancelled' : request.status === 'confirmed' ? 'confirmed' : 'requested';
-  return {fee, state, refundDue: state === 'cancelled' ? fee : 0};
+  const state = delivered ? 'completed' : closed ? 'cancelled' : (request.status === 'confirmed' || ['Đã xác nhận','Đang thực hiện','Hoàn tất'].includes(request.booking_status)) ? 'confirmed' : 'requested';
+  return {fee, state, refundDue: 0};
 }
 
 export async function bootstrapTaxiLegs(client, request) {

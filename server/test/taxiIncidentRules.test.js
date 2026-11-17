@@ -12,8 +12,8 @@ test('khách vắng mặt chỉ với chiều đón và trong chuyến',()=>{
  assert.match(taxiLegTransitionIssue({state:'en_route',leg:'return'},'no_show'),/chiều đón/);
  assert.ok(taxiLegTransitionIssue({state:'completed',leg:'pickup'},'no_show'));
 });
-test('chỉ được hủy trước xuất phát và không cần ghi liên hệ/chờ giờ',()=>{
- assert.equal(taxiLegTransitionIssue({state:'confirmed',leg:'return'},'cancel'),null);
+test('không hủy Taxi riêng kể cả trước xuất phát',()=>{
+ assert.ok(taxiLegTransitionIssue({state:'confirmed',leg:'return'},'cancel'));
  assert.ok(taxiLegTransitionIssue({state:'en_route',leg:'return'},'cancel'));
  assert.ok(taxiLegTransitionIssue({state:'en_route',leg:'pickup'},'contact'));
  assert.ok(taxiLegTransitionIssue({state:'en_route',leg:'pickup'},'arrive'));

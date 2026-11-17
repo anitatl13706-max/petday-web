@@ -1,0 +1,16 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+const source=readFileSync(new URL('../src/Portal.tsx',import.meta.url),'utf8');
+const css=readFileSync(new URL('../src/index.css',import.meta.url),'utf8');
+assert.match(source,/onClick=\{\(\)=>bookAdditionalService\(b\)\}/);
+assert.match(source,/setService\(''\);setBranch\(/);
+assert.match(source,/setStep\(validPet\?2:1\)/);
+assert.match(source,/onGo\('booking'\)/);
+assert.match(source,/Xem chi tiết: ghi chú, Taxi, nhật ký và đổi\/hủy lịch/);
+assert.doesNotMatch(source,/<details open=\{view==='appointments'\}/);
+assert.match(source,/Tổng tiền<\/span>/);
+assert.match(source,/Đã thu<\/span>/);
+assert.match(source,/Còn lại<\/span>/);
+assert.match(source,/is-neutral/);
+assert.match(css,/petday-status-badge\.is-neutral/);
+console.log('V6.119: 10 kiểm tra giao diện đạt.');

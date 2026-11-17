@@ -7,6 +7,7 @@ const cleanAssistantText=(s:string)=>s.replace(/\\\*\\\*/g,'').replace(/\*\*/g,'
 const welcome:ChatMessage={from:'bot',text:'Xin chào! Mình là trợ lý PetDay. Mình có thể hướng dẫn dịch vụ, mua hàng, đặt lịch và hoàn tiền. Bạn muốn tìm hiểu gì?'};
 export default function SupportWidget(){
  const [open,setOpen]=useState(false),[tab,setTab]=useState<'bot'|'human'>('bot');
+ useEffect(()=>{const openAssistant=()=>{setTab('bot');setOpen(true)};window.addEventListener('petday:open-assistant',openAssistant);return()=>window.removeEventListener('petday:open-assistant',openAssistant)},[]);
  const [question,setQuestion]=useState(''),[messages,setMessages]=useState<ChatMessage[]>([welcome]);
  const [name,setName]=useState(''),[email,setEmail]=useState(''),[detail,setDetail]=useState(''),[busy,setBusy]=useState(false),[feedback,setFeedback]=useState('');
  const [thinking,setThinking]=useState(false),[aiEnabled,setAiEnabled]=useState<boolean|null>(null);const endRef=useRef<HTMLDivElement>(null);

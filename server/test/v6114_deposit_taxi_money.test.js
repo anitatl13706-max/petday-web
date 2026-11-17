@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {careBaseFromLines,firstUseDepositAmount,serviceCancellationRefund} from '../src/firstUseDepositPolicy.mjs';
+import {taxiCustomerCancellationRefund} from '../src/taxiIncidentRules.mjs';
+import {refundableTaxiAmount,taxiRefundCreateIssue} from '../src/taxiRefundRules.mjs';
+const lines=[{type:'base',amount:250000},{type:'addon',amount:50000},{type:'taxi',amount:140000},{type:'retail',amount:60000},{type:'schedule',amount:0}];
+test('first use 20% applies to care only, excludes taxi and retail',()=>{assert.equal(careBaseFromLines(lines),300000);assert.equal(firstUseDepositAmount(lines),60000)});
+test('discount is allocated conservatively to care',()=>{assert.equal(firstUseDepositAmount([...lines,{label:'Ưu đãi',amount:-40000}]),52000)});
+test('daycare per-minute care charge remains eligible',()=>assert.equal(firstUseDepositAmount([{type:'base',amount:182667},{type:'schedule',amount:0}]),36534));
+test('service full refund returns only money collected',()=>assert.equal(serviceCancellationRefund({careCharge:250000,policyRefund:250000,actuallyCollected:50000}),50000));
+test('80% care refund retains 20% of fee from first-time deposit',()=>assert.equal(serviceCancellationRefund({careCharge:250000,policyRefund:200000,actuallyCollected:50000}),0));
+test('80% refund full payment only returns eligible service',()=>assert.equal(serviceCancellationRefund({careCharge:250000,policyRefund:200000,actuallyCollected:320000}),200000));
+test('late care cancellation does not return deposit',()=>assert.equal(serviceCancellationRefund({careCharge:250000,policyRefund:0,actuallyCollected:50000}),0));
+test('other reserved refunds are excluded from available cash',()=>assert.equal(serviceCancellationRefund({careCharge:250000,policyRefund:200000,actuallyCollected:320000,otherRefundReserved:100000}),170000));
+test('Taxi departed-not-picked refund = 50% and rounded down',()=>assert.equal(taxiCustomerCancellationRefund(70001),35000));
+test('Taxi never refunds money absent collected funds',()=>assert.match(taxiRefundCreateIssue({state:'cancelled',refundDue:70000,fee:70000,collected:0}),/Chưa ghi nhận tiền/));
+test('Taxi refund limited to recorded refund candidate',()=>assert.equal(refundableTaxiAmount({refundDue:70000,refundCandidate:25000}),25000));

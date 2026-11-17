@@ -1,0 +1,12 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {customerCancellationV120 as decide} from '../src/customerCancellationV120.mjs';
+const base={date:'2026-12-05',slot:'08:30',requestedAt:'2026-12-04T06:30:00+07:00',careCharge:240000,carePaid:240000,fullyPaid:true};
+test('full paid 80% when > 1 hour (even if > 24 hours)',()=>assert.equal(decide(base).refundAmount,192000));
+test('exactly one hour cannot self cancel',()=>assert.equal(decide({...base,requestedAt:'2026-12-05T07:30:00+07:00'}).allowed,false));
+test('unpaid booked event can cancel and refund 0',()=>assert.deepEqual([decide({...base,carePaid:0,fullyPaid:false}).allowed,decide({...base,carePaid:0,fullyPaid:false}).refundAmount],[true,0]));
+test('deposit only not refundable',()=>assert.equal(decide({...base,carePaid:48000,fullyPaid:false,hasDeposit:true}).refundAmount,0));
+test('customer rescheduled, then cancelled, no refund',()=>assert.equal(decide({...base,customerRescheduled:true}).refundAmount,0));
+test('provider cannot serve -> full amount paid returned regardless of time/reschedule',()=>assert.equal(decide({...base,requestedAt:'2026-12-06T08:30:00+07:00',customerRescheduled:true,providerFault:true}).refundAmount,240000));
+test('cannot self cancel after start',()=>assert.equal(decide({...base,requestedAt:'2026-12-05T09:00:00+07:00'}).allowed,false));
+test('money returned must not exceed care portion',()=>assert.equal(decide({...base,carePaid:50000,fullyPaid:true}).refundAmount,40000));

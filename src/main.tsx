@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import ToastProvider from './ToastProvider';
 
 interface BoundaryState { error: string | null }
 class PetDayErrorBoundary extends React.Component<React.PropsWithChildren, BoundaryState> {
@@ -31,5 +32,5 @@ class PetDayErrorBoundary extends React.Component<React.PropsWithChildren, Bound
 const root = document.getElementById('root');
 if (!root) throw new Error('Không tìm thấy phần tử #root của ứng dụng.');
 ReactDOM.createRoot(root).render(
-  <React.StrictMode><PetDayErrorBoundary><App /></PetDayErrorBoundary></React.StrictMode>
+  <React.StrictMode><PetDayErrorBoundary><ToastProvider><App /></ToastProvider></PetDayErrorBoundary></React.StrictMode>
 );

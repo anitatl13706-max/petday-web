@@ -40,15 +40,17 @@ export function calculateExtras(service,ids=[]){
  for(const id of ids){const item=addOns[id];if(!item||!item.services.includes(service))throw Error('Dịch vụ cộng thêm không phù hợp gói chính.');lines.push({type:'addon',code:id,label:item.label,amount:item.amount});total+=item.amount;}
  return {lines,total};
 }
-export const slots={'08:30':3,'10:00':2,'13:30':3,'15:00':2,'17:30':2};
-export const transitions={'Đang chờ xác nhận':['Đã xác nhận','Đã hủy'],'Đã xác nhận':['Đang thực hiện','Đã hủy'],'Đang thực hiện':['Hoàn tất'],'Hoàn tất':[],'Đã hủy':[]};
+// Eight continuous 90-minute time windows from 08:00 to 20:00.
+export const slots={'08:00':3,'09:30':3,'11:00':3,'12:30':3,'14:00':3,'15:30':3,'17:00':3,'18:30':3};
+export const transitions={'Đang chờ xác nhận':['Đã xác nhận','Đã hủy'],'Đã xác nhận':['Đang thực hiện','Đã hủy'],'Đang thực hiện':['Hoàn tất','Không hoàn thành'],'Hoàn tất':[],'Không hoàn thành':[],'Đã hủy':[]};
 export function calculate(service, pet){const item=services[service];if(!item||!item.species.includes(pet.species)||!Number.isFinite(Number(pet.weight))||Number(pet.weight)<=0||pet.weight>item.max)throw Error('Loài hoặc cân nặng thú cưng không phù hợp dịch vụ.');if(!Number.isFinite(Number(pet.age))||pet.age<0||pet.age>40)throw Error('Tuổi thú cưng không hợp lệ. Vui lòng cập nhật hồ sơ.');if(item.category==='Daycare'&&pet.age<daycareMinimumAgeYears)throw Error('Daycare nhận chó hoặc mèo từ đủ 1 tuổi. Vui lòng chọn dịch vụ khác nếu thú cưng nhỏ hơn.');const weightFee=item.category==='Daycare'?0:pet.weight<=5?0:pet.weight<=10?50000:pet.weight<=20?100000:160000;return {total:item.base+weightFee,lines:[{type:'base',label:service,amount:item.base},{type:'weight',label:'Điều chỉnh cân nặng',amount:weightFee}]};}
-export function validSlot(service,slot){return Boolean(slots[slot])&&!(services[service]?.category==='Daycare'&&!['08:30','10:00'].includes(slot))&&!(services[service]?.category==='Spa'&&slot==='17:30');}
+export function validSlot(service,slot){if(services[service]?.category==='Daycare')return /^(?:0[8-9]|1[0-9]):[0-5]\d$/.test(String(slot));return Boolean(slots[slot])&&Number(slot.slice(0,2))*60+Number(slot.slice(3))+services[service].duration<=1200;}
 export function validFutureDate(date){if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;const d=new Date(date+'T00:00:00+07:00');const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Ho_Chi_Minh',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());const [year,month,day]=date.split('-').map(Number);return Number.isFinite(d.getTime())&&new Date(Date.UTC(year,month-1,day)).toISOString().slice(0,10)===date&&date>today;}
 
 /** Availability preview; final booking still checks capacity under transaction lock. */
 export function buildDailySlotPreview({service,branch,used={},blocked={}}){
  if(!services[service]||!['PetDay Thảo Điền','PetDay Phú Mỹ Hưng'].includes(branch))throw Error('Invalid service or branch');
+ if(services[service].category==='Daycare')return []; // Daycare uses custom arrival/departure, no fixed appointment cards.
  return Object.keys(slots).filter(slot=>validSlot(service,slot)).map(slot=>{
   const cap=branch==='PetDay Phú Mỹ Hưng'?Math.max(2,slots[slot]-1):slots[slot];
   const remaining=Math.max(0,cap-(Number(used[slot])||0));

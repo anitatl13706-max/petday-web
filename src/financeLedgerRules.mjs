@@ -1,6 +1,6 @@
 /** Pure presentation rules; backend still verifies payment eligibility in a locked transaction. */
 export function canCollect(b){
- return b?.status!=='Đã hủy' && b?.paymentStatus!=='Đã thanh toán';
+ return !['Đã hủy','Không hoàn thành'].includes(b?.status) && b?.paymentStatus!=='Đã thanh toán';
 }
 export function filterLedger(bookings,{filter='unpaid',query=''}={}){
  const needle=String(query).trim().toLocaleLowerCase('vi-VN');

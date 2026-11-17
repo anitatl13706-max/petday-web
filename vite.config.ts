@@ -33,10 +33,10 @@ react(),
       },
     },
     server: {
-      proxy: { '/uploads': { target: 'http://localhost:4000', changeOrigin: true }, '/api': { target: 'http://localhost:4000', changeOrigin: true } },
+      proxy: { '/uploads': { target: process.env.PETDAY_LOCAL_API || 'http://localhost:4001', changeOrigin: true }, '/api': { target: process.env.PETDAY_LOCAL_API || 'http://localhost:4001', changeOrigin: true } },
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
-      port: parseInt(process.env.PORT || '8443'),
-      strictPort: true,
+      port: parseInt(process.env.PETDAY_WEB_PORT || '5173'),
+      strictPort: false,
       watch: {
         ignored: [
           '**/.figma/**',
@@ -45,7 +45,7 @@ react(),
     },
     preview: {
       host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
-      port: parseInt(process.env.PORT || '8443'),
+      port: parseInt(process.env.PETDAY_WEB_PORT || '5173'),
     },
   }
 })

@@ -2,12 +2,10 @@
 // No timed wait counter or driver application is required by the website.
 export function taxiLegTransitionIssue(leg,action){
  const allowed={
-  confirm:['requested'], depart:['confirmed'],
+  confirm:['requested'], depart:['requested','confirmed'],
   complete:['en_route','arrived','contacting'],
   no_show:['en_route','arrived','contacting','under_review'],
   provider_fault:['requested','confirmed','en_route','arrived','contacting','under_review'],
-  cancel:['requested','confirmed'],
-  cancel_customer_departed:['en_route'],
   review:['en_route','arrived','contacting','under_review'],
   // Legacy-only actions are rejected to keep the new workflow consistent.
  };
@@ -15,8 +13,8 @@ export function taxiLegTransitionIssue(leg,action){
  if(action==='no_show'&&leg.leg!=='pickup')return 'Không gặp khách chỉ áp dụng với chiều đón.';
  return null;
 }
-// Cancellation after departure is only valid when the pet has NOT been collected.
-// VND is an integer: for odd fees round the customer's refund DOWN.
+// Historical math for records before V6.142; never used to cancel or refund a current trip.
+// VND is an integer: for odd fees round the historical refund DOWN.
 export function taxiCustomerCancellationRefund(fee){
  const amount=Number(fee);
  if(!Number.isSafeInteger(amount)||amount<0)throw new Error('Phí Taxi không hợp lệ.');

@@ -1,5 +1,5 @@
 import {bootstrapTaxiLegs} from './taxiLegBootstrap.mjs';
-// V6.104: close only taxi legs that have NOT departed, preserving in-flight or completed trips.
+// V6.142: close unused transport operations without changing fees, preserving in-flight/completed trips.
 // Called within the existing booking transaction; never marks money actually refunded.
 export async function closeUnusedTaxiLegs(client,bookingId,actorId,reason){
  // Hydrate any unvisited Taxi requests before closing their pending directions.
@@ -10,7 +10,7 @@ export async function closeUnusedTaxiLegs(client,bookingId,actorId,reason){
  for(const request of legacy.rows)await bootstrapTaxiLegs(client,request);
  const legs=await client.query("SELECT id,leg,state,fee FROM pet_taxi_legs WHERE booking_id=$1 AND state IN ('requested','confirmed') FOR UPDATE",[bookingId]);
  for(const leg of legs.rows){
-  await client.query("UPDATE pet_taxi_legs SET state='cancelled',refund_due=fee,issue_note=$2,updated_by=$3,updated_at=now() WHERE id=$1",[leg.id,reason,actorId]);
+  await client.query("UPDATE pet_taxi_legs SET state='cancelled',issue_note=$2,updated_by=$3,updated_at=now() WHERE id=$1",[leg.id,reason,actorId]);
   await client.query('INSERT INTO pet_taxi_leg_events(taxi_leg_id,actor_id,action,previous_state,next_state,note) VALUES($1,$2,$3,$4,$5,$6)',[leg.id,actorId,'booking_closed',leg.state,'cancelled',reason]);
  }
  // Legacy summary is closed only when there are no active/in-flight leg records.

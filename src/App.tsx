@@ -56,7 +56,7 @@ function Icon({ name, size = 20, className = '' }: { name: IconName; size?: numb
 }
 
 const photos = {
-  hero: 'https://images.unsplash.com/photo-1606231106595-30ebc70aa72b?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1400',
+  hero: '/services/home-golden-cat-v6144.webp',
   grooming: 'https://images.unsplash.com/photo-1791714887477-c71786e32fba?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=900',
   daycare: 'https://images.unsplash.com/photo-1636654581774-82712b59f87b?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=900',
   dogs: 'https://images.unsplash.com/photo-1712052302539-eade14024ef7?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1000',
@@ -76,19 +76,33 @@ type Service = {
   popular?: boolean;
 };
 
+const serviceImages: Record<string,string> = {
+  'Grooming vệ sinh nhanh': '/services/grooming-quick.webp',
+  'Grooming cơ bản': '/services/grooming-basic.webp',
+  'Grooming toàn diện': '/services/grooming-complete.webp',
+  'Grooming tạo kiểu': '/services/grooming-style.webp',
+  'Spa dịu nhẹ': '/services/spa-gentle.webp',
+  'Spa thư giãn': '/services/spa-relax.webp',
+  'Spa dưỡng lông': '/services/spa-coat.webp',
+  'Spa phục hồi lông': '/services/spa-repair.webp',
+  'Daycare cả ngày': '/services/daycare-all-day.webp',
+};
+
 const services: Service[] = servicePackages.map((s,i)=>({
  id:i+1,category:s.category,name:s.name,description:s.description,
  price:'Từ '+s.price.toLocaleString('vi-VN')+'đ',
  duration:s.duration>=240?(s.duration===480?'Cả ngày':'Nửa ngày'):`Khoảng ${s.duration} phút`,
- image:s.category==='Grooming'?'/services/grooming.webp':s.category==='Spa'?'/services/spa.webp':'/services/daycare.webp',
+ image:serviceImages[s.name] || '/services/grooming.webp',
  popular:false
 }));
 
 function Logo({ light = false }: { light?: boolean }) {
   return (
     <button className="group flex items-center gap-2.5" onClick={() => navigateTo('home')} aria-label="Về trang chủ PetDay">
-      <span className={`grid h-10 w-10 place-items-center rounded-[14px] ${light ? 'bg-white text-[#142B55]' : 'bg-[#142B55] text-white'}`}>
-        <Icon name="paw" size={23} />
+      <span className={`grid h-10 w-10 place-items-center rounded-[14px] ${light ? 'bg-white p-1' : 'bg-[#142B55]'} text-white`}>
+        <span className={`grid h-full w-full place-items-center ${light ? 'rounded-[10px] bg-[#142B55]' : ''}`}>
+          <Icon name="paw" size={light ? 19 : 23} />
+        </span>
       </span>
       <span className={`text-[24px] font-extrabold tracking-[-0.04em] ${light ? 'text-white' : 'text-[#142B55]'}`}>Pet<span className="text-[#FF765E]">Day</span></span>
     </button>
@@ -115,7 +129,7 @@ function Header({ page }: { page: Page }) {
       <div className="hidden bg-[#142B55] py-2 text-white md:block">
         <div className="container-pd flex items-center justify-between text-[13px]">
           <div className="flex items-center gap-5">
-            <span className="flex items-center gap-1.5"><Icon name="phone" size={14} /> 1900 8668</span>
+            <span className="flex items-center gap-1.5"><Icon name="mail" size={14} /> hellopetday123@gmail.com</span>
             <span className="flex items-center gap-1.5"><Icon name="clock" size={14} /> Thứ 2 – Chủ nhật: 08:00 – 20:00</span>
           </div>
           <span>Miễn phí tư vấn chăm sóc thú cưng</span>
@@ -138,9 +152,9 @@ function Header({ page }: { page: Page }) {
               {accountOpen&&<div role="menu" className="absolute right-0 top-full z-50 mt-2 w-72 rounded-2xl border border-[#DDE9F8] bg-white p-2 shadow-xl">
                 <div className="border-b border-[#E3ECF7] px-3 py-3"><p className="truncate text-sm font-bold text-[#142B55]">{viewer?.full_name||'Chào mừng đến PetDay'}</p><p className="mt-1 text-xs text-slate-500">{viewer?.role==='admin'?'Quản trị viên':viewer?.role==='staff'?'Nhân viên PetDay':viewer?'Tài khoản khách hàng':'Vui lòng đăng nhập để tiếp tục'}</p></div>
                 {(viewer?.role==='admin' ? [
-                  ['Bảng điều hành','admin',''],['Lịch hẹn & điều phối','admin','admin-bookings'],['Tài chính & đơn hàng','admin','admin-finance-workbench']
+                  ['Bảng điều hành','admin',''],['Lịch hẹn & điều phối','admin','admin-bookings'],['Đơn cửa hàng','admin','']
                 ] : viewer?.role==='staff' ? [['Lịch làm việc của tôi','admin','']] : viewer ? [
-                  ['Tài khoản & thú cưng','account','account-profile'],['Lịch hẹn của tôi','appointments','appointments-list'],['Thanh toán','appointments','customer-payments'],['Hỗ trợ & thông báo','account','customer-consultations']
+                  ['Tài khoản & thú cưng','account','account-profile'],['Lịch hẹn của tôi','appointments','appointments-list'],['Hỗ trợ & thông báo','account','customer-consultations']
                 ] : [['Đăng nhập / Đăng ký','account','']]).map(([label,to,section])=><button key={label} role="menuitem" className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-[#142B55] transition hover:bg-[#EDF5FC] focus-visible:outline-[#FF765E]" onClick={()=>{setAccountOpen(false);go(to as Page,section||undefined)}}>{label}</button>)}
                 {viewer&&<button role="menuitem" className="mt-1 w-full border-t border-[#E3ECF7] px-3 py-3 text-left text-sm font-semibold text-red-600 hover:bg-red-50" onClick={()=>{sessionStorage.removeItem('petday_token_v3');sessionStorage.removeItem('petday_api_token');setAccountOpen(false);setViewer(null);go('home');window.location.reload()}}>Đăng xuất</button>}
               </div>}
@@ -207,27 +221,6 @@ function ServiceCard({ service, compact = false }: { service: Service; compact?:
   );
 }
 
-function BookingBar() {
-  const [pet, setPet] = useState('Chó');
-  const [interest, setInterest] = useState('Grooming');
-  const [preferredDate, setPreferredDate] = useState('');
-  const openBooking = () => {
-    sessionStorage.setItem('petday_service_prefill',interest==='Spa'?'Spa dưỡng lông':interest==='Daycare'?'Daycare cả ngày':'Grooming toàn diện');
-    if (preferredDate) localStorage.setItem('petday_booking_date', preferredDate);
-    navigateTo('booking');
-  };
-  return (
-    <div id="dat-lich" className="container-pd relative z-10 -mt-10">
-      <div className="grid gap-3 rounded-[24px] bg-white p-4 shadow-[0_18px_60px_rgba(20,43,85,0.14)] md:grid-cols-[1fr_1fr_1fr_auto] md:p-5">
-        <label className="field"><span>Bé nhà bạn là</span><select value={pet} onChange={e => setPet(e.target.value)}><option>Chó</option><option>Mèo</option></select></label>
-        <label className="field"><span>Dịch vụ quan tâm</span><select value={interest} onChange={event => setInterest(event.target.value)}><option>Grooming</option><option>Spa</option><option>Daycare</option></select></label>
-        <label className="field"><span>Ngày mong muốn</span><input type="date" value={preferredDate} onChange={event => setPreferredDate(event.target.value)} /></label>
-        <button className="btn-coral justify-center self-stretch px-7" onClick={openBooking}><Icon name="calendar" size={19} /> Tìm lịch trống</button>
-      </div>
-    </div>
-  );
-}
-
 function usePublishedServices(){
  const [published,setPublished]=useState<any[]|null>(null);
  useEffect(()=>{let live=true;apiFetch('/api/public/services').then(async r=>{if(!r.ok)throw Error('catalog unavailable');return r.json()}).then((items:any[])=>{if(live&&Array.isArray(items))setPublished(items)}).catch(()=>{});return()=>{live=false};},[]);
@@ -237,39 +230,43 @@ function HomePage() {
   const liveServices=usePublishedServices();
   const [reviewOffset,setReviewOffset]=useState(0);
   const [storyOpen,setStoryOpen]=useState(false);
+  const [homeQuery,setHomeQuery]=useState('');
+  const [homeResults,setHomeResults]=useState<{services:{name:string;category:string;description?:string}[];products:{id:number;name:string;category:string;price:number}[]}>({services:[],products:[]});
+  const [homeSearchOpen,setHomeSearchOpen]=useState(false);
+  const [homeSearchError,setHomeSearchError]=useState('');
+  const searchHome=async(e:React.FormEvent)=>{e.preventDefault();const q=homeQuery.trim();if(q.length<2){setHomeSearchError('Vui lòng nhập ít nhất 2 ký tự.');setHomeSearchOpen(true);return;}setHomeSearchError('');setHomeSearchOpen(true);try{const [a,b]=await Promise.all([apiFetch('/api/public/services?q='+encodeURIComponent(q)),apiFetch('/api/public/retail-search?q='+encodeURIComponent(q))]);if(!a.ok||!b.ok)throw Error();const [sv,pd]=await Promise.all([a.json(),b.json()]);setHomeResults({services:Array.isArray(sv)?sv:[],products:Array.isArray(pd)?pd:[]});}catch{setHomeSearchError('Chưa tải được kết quả. Kiểm tra kết nối Backend và thử lại.');setHomeResults({services:[],products:[]});}};
+  const goServiceResult=(name:string)=>{sessionStorage.setItem('petday_service_prefill',name);navigateTo('booking');};
+  const goProductResult=(name:string)=>{sessionStorage.setItem('petday_shop_search_prefill',name);navigateTo('shop');};
+
   return (
     <main>
-      <section className="relative overflow-hidden bg-[#DCEEFF]">
-        <div className="hero-dot absolute -left-10 top-16 h-32 w-32 opacity-35" />
-        <div className="container-pd grid min-h-[650px] items-center gap-10 py-16 lg:grid-cols-[1.03fr_.97fr] lg:py-20">
-          <div className="relative z-10">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#142B55] shadow-sm"><Icon name="sparkle" size={17} className="text-[#FF765E]" /> Chăm bằng chuyên môn, yêu bằng cả trái tim</div>
-            <h1 className="max-w-[650px] text-[44px] font-extrabold leading-[1.08] tracking-[-0.05em] text-[#142B55] sm:text-[58px] lg:text-[68px]">Mỗi ngày của bé đều là một <span className="relative text-[#FF765E]">ngày vui<span className="absolute -bottom-2 left-0 h-2 w-full rounded-full bg-[#FF765E]/20" /></span></h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-[#53647E]">Dịch vụ grooming, spa và chăm sóc ban ngày chuyên nghiệp, nơi mỗi thú cưng được thấu hiểu, nâng niu và là chính mình.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button className="btn-navy" onClick={() => navigateTo('booking')}>Đặt lịch cho bé <Icon name="arrow" size={18} /></button>
-              <button className="btn-white" onClick={() => navigateTo('services')}><span className="grid h-7 w-7 place-items-center rounded-full bg-[#DCEEFF]"><Icon name="play" size={15} /></span> Khám phá dịch vụ</button>
+      <section className="petday-hero" aria-label="Giới thiệu PetDay">
+        <div className="petday-hero-photo"><img src={photos.hero} alt="Chó Golden và mèo thư giãn bên nhau tại PetDay" fetchPriority="high" /></div>
+        <svg className="petday-hero-paw" viewBox="0 0 100 100" aria-hidden="true" fill="currentColor"><ellipse cx="20" cy="31" rx="12" ry="17" transform="rotate(-25 20 31)"/><ellipse cx="43" cy="17" rx="12" ry="17"/><ellipse cx="68" cy="20" rx="12" ry="17" transform="rotate(18 68 20)"/><ellipse cx="85" cy="42" rx="11" ry="15" transform="rotate(35 85 42)"/><path d="M50 45C32 45 12 68 18 81c6 14 23 8 33 6 13-3 29 9 36-5 7-15-18-37-37-37Z"/></svg>
+        <div className="container-pd petday-hero-grid">
+          <div className="petday-hero-copy">
+            <div className="petday-hero-tag"><Icon name="paw" size={18} /> Chăm bằng chuyên môn, yêu bằng cả trái tim</div>
+            <h1>Chăm sóc thú cưng <span>như người nhà <Icon name="heart" size={32} /></span></h1>
+            <p>Dịch vụ Grooming, Spa và trông giữ ban ngày an toàn, tận tâm tại PetDay.</p>
+            <div className="petday-hero-actions">
+              <button type="button" className="btn-coral" onClick={() => navigateTo('booking')}><Icon name="calendar" size={19} /> Đặt lịch ngay <Icon name="arrow" size={18} /></button>
+              <button type="button" className="btn-outline" onClick={() => document.getElementById('quy-trinh')?.scrollIntoView({behavior:'smooth',block:'start'})}><Icon name="play" size={18} /> Xem quy trình</button>
             </div>
-            <div className="mt-9 flex flex-wrap items-center gap-6 text-sm font-semibold text-[#52617A]">
-              <span className="flex items-center gap-2"><span className="check-dot"><Icon name="check" size={13} /></span> Chuyên viên tận tâm</span>
-              <span className="flex items-center gap-2"><span className="check-dot"><Icon name="check" size={13} /></span> Không gian sạch chuẩn</span>
+            <div className="petday-hero-benefits">
+              <span><Icon name="shield" size={21} /> An toàn, sạch sẽ</span>
+              <span><Icon name="user" size={21} /> Đội ngũ tận tâm</span>
+              <span><Icon name="paw" size={21} /> Không gian thân thiện</span>
             </div>
-          </div>
-          <div className="relative mx-auto w-full max-w-[590px]">
-            <div className="absolute -inset-4 translate-x-5 translate-y-5 rounded-[44px_44px_120px_44px] bg-[#142B55]/8" />
-            <div className="relative h-[420px] overflow-hidden rounded-[38px_38px_110px_38px] sm:h-[520px]">
-              <img src={photos.hero} alt="Khách hàng vui vẻ ôm thú cưng tại PetDay" className="h-full w-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#142B55]/25 to-transparent" />
-            </div>
-            <div className="absolute -left-5 bottom-8 flex items-center gap-3 rounded-2xl bg-white p-3 pr-5 shadow-xl sm:-left-10">
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-[#FFF0EC] text-[#FF765E]"><Icon name="heart" className="fill-current" /></div>
-              <div><strong className="block text-sm text-[#142B55]">4.9/5 trải nghiệm</strong><span className="text-xs text-[#718097]">từ hơn 2.000 sen</span></div>
-            </div>
-            <div className="absolute -right-2 top-10 grid h-20 w-20 rotate-6 place-items-center rounded-3xl bg-[#FF765E] text-white shadow-lg"><Icon name="paw" size={38} /></div>
           </div>
         </div>
+        <svg className="petday-hero-wave" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true"><path fill="#fff" d="M0 45Q260 -8 570 37Q735 56 880 75H1440V80H0Z"/></svg>
       </section>
-      <BookingBar />
+
+      <section className="relative z-10 -mt-10 pb-4" aria-label="Tìm kiếm dịch vụ và sản phẩm">
+        <div className="container-pd"><form onSubmit={searchHome} role="search" className="rounded-[28px] bg-white p-5 shadow-[0_18px_55px_rgba(20,43,85,.13)] sm:p-7"><label htmlFor="petday-home-search" className="mb-3 block text-xs font-extrabold uppercase tracking-widest text-[#7B8CA7]">TÌM DỊCH VỤ & SẢN PHẨM PETDAY</label><div className="flex flex-col gap-3 sm:flex-row"><div className="flex flex-1 items-center gap-3 rounded-2xl bg-[#F4F7FB] px-5"><Icon name="search" className="text-[#7A8BA4]"/><input id="petday-home-search" type="search" minLength={2} maxLength={100} value={homeQuery} onChange={e=>{setHomeQuery(e.target.value);setHomeSearchOpen(false)}} placeholder="Tìm Grooming, Spa, Daycare, sữa tắm, pate..." className="min-w-0 w-full bg-transparent py-4 text-base font-semibold text-[#142B55] outline-none placeholder:font-normal"/></div><button className="rounded-2xl bg-[#FF765E] px-8 py-4 font-extrabold text-white hover:bg-[#EA6953]" type="submit">Tìm kiếm</button></div>
+          {homeSearchOpen&&<div className="mt-4 rounded-2xl border border-[#DCE7F5] p-4" aria-live="polite">{homeSearchError?<p className="text-sm text-red-700">{homeSearchError}</p>:<><p className="mb-3 text-xs font-bold text-[#62748C]">Kết quả cho “{homeQuery.trim()}”</p>{homeResults.services.length>0&&<div className="mb-3"><h3 className="mb-2 font-bold text-[#142B55]">Dịch vụ ({homeResults.services.length})</h3>{homeResults.services.slice(0,8).map(x=><button type="button" key={x.name} onClick={()=>goServiceResult(x.name)} className="block w-full rounded-lg p-2 text-left text-sm hover:bg-[#EFF6FD]">{x.name} · {x.category}</button>)}</div>}{homeResults.products.length>0&&<div><h3 className="mb-2 font-bold text-[#142B55]">Sản phẩm ({homeResults.products.length})</h3>{homeResults.products.map(x=><button type="button" key={x.id} onClick={()=>goProductResult(x.name)} className="flex w-full justify-between gap-4 rounded-lg p-2 text-left text-sm hover:bg-[#EFF6FD]"><span>{x.name}</span><span className="shrink-0 font-bold">{Number(x.price).toLocaleString('vi-VN')}đ</span></button>)}</div>}{!homeResults.services.length&&!homeResults.products.length&&<p className="text-sm text-slate-600">Không tìm thấy dịch vụ hoặc sản phẩm phù hợp. Hãy thử từ khóa khác.</p>}</>}</div>}
+        </form></div>
+      </section>
 
       <section className="section-space">
         <div className="container-pd">
@@ -318,7 +315,7 @@ function HomePage() {
           <div className="relative">
             <div className="h-[520px] overflow-hidden rounded-[36px]"><img src={photos.dogs} alt="Những chú chó vui chơi tại PetDay" className="h-full w-full object-cover" /></div>
             <div className="absolute -bottom-7 -right-4 rounded-[24px] bg-[#142B55] p-6 text-white shadow-xl sm:right-8">
-              <strong className="block text-4xl font-extrabold">—</strong><span className="mt-1 block text-sm text-white/70">năm đồng hành<br />cùng thú cưng</span>
+              <strong className="block text-4xl font-extrabold">10</strong><span className="mt-1 block text-sm text-white/70">năm đồng hành<br />cùng thú cưng</span>
             </div>
           </div>
           <div>
@@ -362,7 +359,7 @@ function HomePage() {
               [photos.cat, 'Chăm sóc', '5 dấu hiệu cho thấy mèo của bạn cần được grooming', '6 phút đọc'],
               [photos.labs, 'Dinh dưỡng', 'Chọn bữa ăn phù hợp theo độ tuổi và mức vận động', '8 phút đọc'],
               [photos.owner, 'Hành vi', 'Giúp bé làm quen với lần đầu đến spa như thế nào?', '5 phút đọc'],
-            ].map(([image, tag, title, time]) => <article key={title} className="article-card group"><div className="h-60 overflow-hidden rounded-[22px]"><img src={image} alt={title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /></div><div className="pt-5"><div className="flex items-center gap-3 text-xs font-semibold"><span className="text-[#FF765E]">{tag}</span><span className="h-1 w-1 rounded-full bg-[#9CA6B5]" /><span className="text-[#7A8698]">{time}</span></div><h3 className="mt-3 text-xl font-bold leading-7 tracking-[-0.02em] text-[#142B55]">{title}</h3><button onClick={()=>window.dispatchEvent(new CustomEvent("petday:article",{detail:title}))} className="mt-4 flex items-center gap-2 text-sm font-bold text-[#142B55]">Đọc bài viết <Icon name="arrow" size={17} /></button></div></article>)}
+            ].map(([image, tag, title, time]) => <article key={title} className="article-card group"><button type="button" aria-label={"Đọc bài viết: "+title} onClick={()=>window.dispatchEvent(new CustomEvent("petday:article",{detail:title}))} className="block h-60 w-full overflow-hidden rounded-[22px] text-left"><img src={image} alt={title} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" /></button><div className="pt-5"><div className="flex items-center gap-3 text-xs font-semibold"><span className="text-[#FF765E]">{tag}</span><span className="h-1 w-1 rounded-full bg-[#9CA6B5]" /><span className="text-[#7A8698]">{time}</span></div><h3 className="mt-3 text-xl font-bold leading-7 tracking-[-0.02em] text-[#142B55]"><button type="button" className="text-left hover:underline" onClick={()=>window.dispatchEvent(new CustomEvent("petday:article",{detail:title}))}>{title}</button></h3><button onClick={()=>window.dispatchEvent(new CustomEvent("petday:article",{detail:title}))} className="mt-4 flex items-center gap-2 text-sm font-bold text-[#142B55]">Đọc bài viết <Icon name="arrow" size={17} /></button></div></article>)}
           </div>
         </div>
       </section>
@@ -371,16 +368,37 @@ function HomePage() {
 }
 
 const careArticles = [
- {title:'5 dấu hiệu cho thấy mèo của bạn cần được grooming',body:['Bộ lông rối, bết hoặc có những mảng lông khó chải có thể là dấu hiệu cần được chăm sóc thêm.','Mèo liếm lông nhiều hơn bình thường, khó tự vệ sinh một số vùng hoặc có mùi bất thường cũng cần được quan sát.','Nếu da đỏ, đau, rụng lông bất thường hoặc mèo khó chịu, nên tham khảo bác sĩ thú y trước khi đặt dịch vụ.']},
- {title:'Chọn bữa ăn phù hợp theo độ tuổi và mức vận động',body:['Nhu cầu ăn uống thay đổi theo tuổi, kích thước và mức vận động của từng thú cưng.','Chọn thức ăn phù hợp loài và giai đoạn phát triển, theo dõi cân nặng và cho uống đủ nước.','Không tự thay đổi chế độ ăn điều trị nếu chưa có hướng dẫn của bác sĩ thú y.']},
- {title:'Giúp bé làm quen với lần đầu đến spa như thế nào?',body:['Tập cho thú cưng quen với việc chạm nhẹ vào bàn chân, chải lông và tiếng động ở mức thấp.','Trước buổi spa, thông báo cho nhân viên về tính cách, dị ứng hoặc các tình huống khiến thú cưng lo lắng.','Ưu tiên buổi chăm sóc ngắn, nhẹ nhàng; dừng lại nếu thú cưng quá căng thẳng.']}
+ {title:'5 dấu hiệu cho thấy mèo của bạn cần được grooming',body:[
+ '1. Lông bết và rối thành từng mảng: Khi mèo không thể tự chải sạch lớp lông, các nút rối có thể kéo căng da. Không dùng kéo cắt sát da vì da mèo rất mỏng.',
+ '2. Lông rụng nhiều, xuất hiện búi lông: Chải lông đều đặn giúp loại bỏ lông chết, nhất là vào mùa thay lông. Tần suất cần thay đổi theo độ dài và kiểu lông.',
+ '3. Mèo khó vệ sinh vùng lưng hoặc phía sau: Mèo cao tuổi, thừa cân hoặc hạn chế vận động có thể cần sự hỗ trợ nhẹ nhàng.',
+ '4. Mùi lạ và lớp lông nhờn bất thường: Có thể do việc tự vệ sinh kém; nếu mùi kéo dài, cần tìm nguyên nhân y tế thay vì chỉ tắm.',
+ '5. Da đỏ, ngứa hoặc có vảy: Đây không đơn thuần là nhu cầu grooming. Nên tham khảo bác sĩ thú y trước khi đưa mèo đi tắm hoặc cắt tỉa.',
+ 'Chuẩn bị trước buổi grooming: Cho mèo quen với lược, lồng vận chuyển và thao tác chạm nhẹ; thông báo rõ với nhân viên về vùng da nhạy cảm, bệnh nền và tính cách của mèo.'
+ ]},
+ {title:'Chọn bữa ăn phù hợp theo độ tuổi và mức vận động',body:[
+ 'Giai đoạn nhỏ tuổi: Chó, mèo con cần thức ăn phù hợp giai đoạn phát triển, thường chia thành các bữa nhỏ; không dùng thức ăn dành cho thú trưởng thành làm khẩu phần duy nhất nếu không phù hợp.',
+ 'Giai đoạn trưởng thành: Chọn khẩu phần theo loài, cân nặng, thể trạng và mức vận động. Thú ít hoạt động có thể cần năng lượng thấp hơn thú tập luyện nhiều.',
+ 'Giai đoạn cao tuổi: Theo dõi cân nặng, khả năng nhai, tiêu hóa và các bệnh lý nền; điều chỉnh cùng bác sĩ thú y nếu có bệnh mạn tính.',
+ 'Đọc nhãn thức ăn: Ưu tiên sản phẩm ghi rõ loại vật nuôi và giai đoạn sống; kiểm tra định lượng gợi ý và điều chỉnh theo thể trạng thực tế.',
+ 'Khi thay đổi thức ăn: Chuyển dần trong vài ngày, theo dõi phân, nôn, ngứa hoặc bỏ ăn. Cung cấp nước sạch hằng ngày và hạn chế đồ ăn nhiều muối, đường.',
+ 'Nếu thú cưng mang thai, mắc bệnh thận, tiểu đường hoặc dị ứng, khẩu phần cần được tư vấn cá nhân hóa từ bác sĩ thú y.'
+ ]},
+ {title:'Giúp bé làm quen với lần đầu đến spa như thế nào?',body:[
+ 'Trước buổi hẹn vài ngày: Cho thú cưng làm quen với việc chạm nhẹ vào chân, tai và thao tác chải lông; kết hợp thưởng khi thú giữ bình tĩnh.',
+ 'Tập thích nghi với âm thanh: Bắt đầu từ khoảng cách xa, âm lượng nhỏ khi giới thiệu tiếng máy sấy hoặc tiếng nước. Không ép thú cưng nếu xuất hiện dấu hiệu sợ hãi.',
+ 'Chuẩn bị thông tin: Ghi chú dị ứng, vùng da nhạy cảm, bệnh đang điều trị, thói quen phản ứng và số liên hệ khẩn cấp để nhân viên có phương án phù hợp.',
+ 'Khi đến PetDay: Mang dây dắt hoặc lồng vận chuyển an toàn, đến đúng giờ; trao đổi về khả năng hợp tác của bé trước khi bắt đầu.',
+ 'Trong buổi đầu: Ưu tiên quy trình ngắn, ít kích thích. Nếu bé quá căng thẳng, nhân viên nên tạm dừng, trao đổi và hẹn phương án khác thay vì cố hoàn thành.',
+ 'Sau buổi spa: Quan sát tình trạng da, hành vi, mức độ ăn uống. Nếu có dấu hiệu đau, sưng, khó thở hoặc bất thường kéo dài, liên hệ bác sĩ thú y.'
+ ]}
 ];
 function CareArticleReader({article,onClose}:{article:typeof careArticles[number];onClose:()=>void}){return <div role="dialog" aria-modal="true" aria-label={article.title} className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0E2143]/60 p-4" onClick={onClose}><article onClick={e=>e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] overflow-auto rounded-3xl bg-white p-7 shadow-2xl"><div className="flex items-start justify-between gap-3"><h2 className="text-2xl font-extrabold text-[#142B55]">{article.title}</h2><button aria-label="Đóng bài viết" onClick={onClose} className="rounded-full border px-3 py-2">✕</button></div><div className="mt-5 space-y-4 text-[#445570] leading-8">{article.body.map(x=><p key={x}>{x}</p>)}</div><p className="mt-6 text-xs text-slate-500">Thông tin tham khảo chăm sóc thú cưng, không thay thế tư vấn thú y.</p></article></div>}
 
 function ServicesPage() {
   const liveServices=usePublishedServices();
   const [category, setCategory] = useState('Tất cả');
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(()=>{const term=sessionStorage.getItem('petday_service_search')||'';sessionStorage.removeItem('petday_service_search');return term;});
   const filtered = liveServices.filter(s => (category === 'Tất cả' || s.category === category) && `${s.name} ${s.description}`.toLowerCase().includes(query.toLowerCase()));
   return (
     <main>
@@ -415,8 +433,8 @@ function ServicesPage() {
           <div className="relative overflow-hidden rounded-[32px] bg-[#142B55] px-6 py-12 text-white md:px-14 md:py-14">
             <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full border-[45px] border-white/5" />
             <div className="relative flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
-              <div className="max-w-2xl"><span className="text-sm font-bold uppercase tracking-[.14em] text-[#FF9A88]">Chưa biết chọn dịch vụ nào?</span><h2 className="mt-3 text-3xl font-extrabold tracking-[-.03em] md:text-4xl">Để PetDay tư vấn riêng cho bé nhé</h2><p className="mt-3 text-white/65">Chia sẻ giống, tuổi và thói quen của bé. Chuyên viên sẽ gợi ý trải nghiệm phù hợp nhất.</p></div>
-              <button className="btn-coral shrink-0"><Icon name="phone" size={18} /> Gọi 1900 8668</button>
+              <div className="max-w-2xl"><span className="text-sm font-bold uppercase tracking-[.14em] text-[#FF9A88]">Chưa biết chọn dịch vụ nào?</span><h2 className="mt-3 text-3xl font-extrabold tracking-[-.03em] md:text-4xl">Để PetDay tư vấn riêng cho bé nhé</h2><p className="mt-3 text-white/65">Chia sẻ nhu cầu của bé với trợ lý PetDay để khám phá dịch vụ phù hợp.</p></div>
+              <button type="button" className="btn-coral shrink-0" onClick={()=>window.dispatchEvent(new Event("petday:open-assistant"))}><Icon name="sparkle" size={18} /> Chat với PetDay</button>
             </div>
           </div>
         </div>
@@ -432,7 +450,7 @@ function Footer() {
         <div><Logo light /><p className="mt-5 max-w-sm text-sm leading-7 text-white/60">PetDay mang đến trải nghiệm chăm sóc chuyên nghiệp, an toàn và đầy yêu thương cho mọi người bạn bốn chân.</p></div>
         <div><h3 className="footer-title">Khám phá</h3><div className="footer-links"><button onClick={() => navigateTo('home')}>Trang chủ</button><button onClick={() => navigateTo('services')}>Dịch vụ</button><button onClick={()=>navigateTo("home")}>Về PetDay</button><button onClick={()=>{navigateTo("home");setTimeout(()=>document.getElementById("cam-nang")?.scrollIntoView({behavior:"smooth"}),50)}}>Cẩm nang</button></div></div>
         <div><h3 className="footer-title">Dịch vụ</h3><div className="footer-links"><button onClick={()=>navigateTo("services")}>Grooming</button><button onClick={()=>navigateTo("services")}>Spa thư giãn</button><button onClick={()=>navigateTo("services")}>Daycare</button><button onClick={()=>navigateTo("services")}>Đưa đón tận nơi</button></div></div>
-        <div><h3 className="footer-title">Liên hệ</h3><div className="space-y-4 text-sm leading-6 text-white/65"><p className="flex gap-3"><Icon name="location" size={19} className="mt-1 shrink-0 text-[#FF765E]" /> 28 Nguyễn Văn Hưởng, Thảo Điền, TP. Thủ Đức</p><p className="flex gap-3"><Icon name="phone" size={18} className="shrink-0 text-[#FF765E]" /> 1900 8668</p><p className="flex gap-3"><Icon name="mail" size={18} className="shrink-0 text-[#FF765E]" /> hello@petday.vn</p></div></div>
+        <div><h3 className="footer-title">Liên hệ</h3><div className="space-y-4 text-sm leading-6 text-white/65"><p className="flex gap-3"><Icon name="location" size={19} className="mt-1 shrink-0 text-[#FF765E]" /> 28 Nguyễn Văn Hưởng, Thảo Điền, TP. Thủ Đức</p><p className="flex gap-3"><Icon name="mail" size={18} className="shrink-0 text-[#FF765E]" /> hellopetday123@gmail.com</p></div></div>
       </div>
       <div className="border-t border-white/8"><div className="container-pd flex flex-col gap-2 py-5 text-xs text-white/40 sm:flex-row sm:justify-between"><span>© 2026 PetDay. Mọi quyền được bảo lưu.</span><span>Điều khoản sử dụng · Chính sách bảo mật · <a href="/#kiem-tra-he-thong" className="underline hover:text-white">Kiểm tra hệ thống</a></span></div></div>
     </footer>

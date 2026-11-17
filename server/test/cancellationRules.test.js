@@ -18,4 +18,4 @@ test('admin cannot cancel a started booking',()=>assert.match(cancellationDecisi
 
 test('paid booking still waiting Admin approval may request cancellation',()=>assert.equal(cancellationRequestIssue({...sample,status:'Đang chờ xác nhận',paid:true}),null));
 test('paid unserved booking may request cancellation on appointment day for refund',()=>assert.equal(cancellationRequestIssue({...sample,paid:true,bookingDate:sample.today}),null));
-test('unpaid booking waiting Admin confirmation cannot request reviewed cancellation',()=>assert.ok(cancellationRequestIssue({...sample,status:'Đang chờ xác nhận',paid:false})));
+test('unpaid unstarted booking can cancel without refund',()=>assert.equal(cancellationRequestIssue({...sample,status:'Đang chờ xác nhận',paid:false}),null));

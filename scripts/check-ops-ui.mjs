@@ -9,7 +9,7 @@ assert.match(portal,/Khách không đến · mở xác minh No-show/);
 assert.match(portal,/Hủy lịch · mở biểu mẫu và chọn lý do/);
 assert.match(portal,/BookingFinancialSnapshot code=\{b.code\}/);
 assert.match(taxi,/CẦN XỬ LÝ HỦY/);
-assert.ok(taxi.includes("leg.customerPlan!=='ask_cancel'&&<button")&&taxi.includes('Hoàn tất · Đã bàn giao pet'));
+assert.ok(taxi.includes("leg.customerPlan!=='ask_cancel'&&<button")&&taxi.includes('Hoàn tất · Đã bàn giao pet')); 
 assert.match(taxi,/defaultOpen=\{leg.customerPlan==='ask_cancel'/);
 assert.match(taxi,/Lịch sử Pet Taxi/);
 assert.match(invoice,/onToggle=\{e=>\{if\(e.currentTarget.open\)void load\(\);\}\}/);
